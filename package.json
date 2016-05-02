@@ -1,0 +1,24 @@
+{
+  "name": "amxmodx-plugin-eventsemitter",
+  "version": "1.0.0",
+  "description": "Emit server events to a redis subscriber",
+  "scripts": {
+    "build": "node build"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/tenub/amxmodx-plugin-eventsemitter.git"
+  },
+  "author": "Joseph Chrzan",
+  "license": "ISC",
+  "bugs": {
+    "url": "https://github.com/tenub/amxmodx-plugin-eventsemitter/issues"
+  },
+  "homepage": "https://github.com/tenub/amxmodx-plugin-eventsemitter#readme",
+  "dependencies": {
+    "amxmodx-build": "tenub/amxmodx-build"
+  },
+  "amxmodx": {
+    "path": "C:/Program Files (x86)/Steam/steamapps/common/Half-Life/cstrike/addons/amxmodx"
+  }
+}
