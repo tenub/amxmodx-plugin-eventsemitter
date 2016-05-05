@@ -17,8 +17,5 @@
   "homepage": "https://github.com/tenub/amxmodx-plugin-eventsemitter#readme",
   "dependencies": {
     "amxmodx-build": "tenub/amxmodx-build"
-  },
-  "amxmodx": {
-    "path": "C:/Program Files (x86)/Steam/steamapps/common/Half-Life/cstrike/addons/amxmodx"
   }
 }

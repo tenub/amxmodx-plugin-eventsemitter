@@ -6,7 +6,7 @@
 #include <amxmodx>
 #include <sockets_hz>
 
-#include ".env"
+#include ".env.inc"
 
 new g_redis_socket
 
