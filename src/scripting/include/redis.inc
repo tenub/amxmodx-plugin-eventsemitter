@@ -16,8 +16,10 @@ public redis_connect()
 
 	g_redis_socket = socket_open(REDIS_HOST, REDIS_PORT, SOCKET_TCP, error)
 
-	if (g_redis_socket <= 0) {
-		switch (error) {
+	if (g_redis_socket <= 0)
+	{
+		switch (error)
+		{
 			case 1: {
 				server_print("Error creating socket")
 			}
@@ -57,8 +59,10 @@ public redis_publish(channel[], data[])
 
 	//client_print(0, print_console, "Publish: %s", publishCommand)
 
-	if (redis_connect()) {
-		if (redis_authenticate()) {
+	if (redis_connect())
+	{
+		if (redis_authenticate())
+		{
 			redis_send(publishCommand, publishCommandSize)
 			redis_receive(publishBuffer)
 
@@ -73,7 +77,8 @@ public redis_publish(channel[], data[])
 
 public redis_receive(buffer[512])
 {
-	if (socket_change(g_redis_socket)) {
+	if (socket_change(g_redis_socket))
+	{
 		socket_recv(g_redis_socket, buffer, sizeof(buffer) - 1)
 	}
 
@@ -90,14 +95,15 @@ public redis_disconnect()
 	socket_close(g_redis_socket)
 }
 
-stock format_command_resp(commandString[512])
+stock format_command_resp(commandString[])
 {
-	new commandArray[8][128], commandArraySize
+	new pos, arg[240], fmtArg[256], fmtCommandString[512]
+	new commandArray = ArrayCreate(256), commandArraySize
 
-	commandArraySize = explode_string(commandString, " ", commandArray, 8, 127)
-
-	for (new i = 0; i < commandArraySize; i++) {
-		format(commandArray[i], 127, "$%d^r^n%s", strlen(commandArray[i]), commandArray[i])
+	while ((pos = argparse(commandString, pos, arg, sizeof(arg) - 1)) > -1)
+	{
+		formatex(fmtArg, sizeof(fmtArg) - 1, "$%d^r^n%s", strlen(arg), arg)
+		ArrayPushString(commandArray, fmtArg)
 	}
 
 	implode_strings(commandArray, commandArraySize, "^r^n", commandString, 511)
@@ -105,3 +111,20 @@ stock format_command_resp(commandString[512])
 
 	return strlen(commandString)
 }
+
+/*stock format_command_resp(commandString[512])
+{
+	new commandArray[8][128], commandArraySize
+
+	commandArraySize = explode_string(commandString, " ", commandArray, 8, 127)
+
+	for (new i = 0; i < commandArraySize; i++)
+	{
+		format(commandArray[i], 127, "$%d^r^n%s", strlen(commandArray[i]), commandArray[i])
+	}
+
+	implode_strings(commandArray, commandArraySize, "^r^n", commandString, 511)
+	format(commandString, 511, "*%d^r^n%s^r^n", commandArraySize, commandString)
+
+	return strlen(commandString)
+}*/
