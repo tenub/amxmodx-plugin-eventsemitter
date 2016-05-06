@@ -37,14 +37,14 @@ public redis_connect()
 
 public redis_authenticate()
 {
-	new authCommand[512], authCommandSize, authBuffer[512]
+	new authCommand[512], fmtAuthCommand[512], authCommandSize, authBuffer[512]
 
-	format(authCommand, 511, "AUTH %s", REDIS_PASS)
-	authCommandSize = format_command_resp(authCommand)
+	formatex(authCommand, 511, "AUTH %s", REDIS_PASS)
+	authCommandSize = format_command_resp(authCommand, fmtAuthCommand)
 
 	//client_print(0, print_console, "Authenticate: %s", authCommand)
 
-	redis_send(authCommand, authCommandSize)
+	redis_send(fmtAuthCommand, authCommandSize)
 	redis_receive(authBuffer)
 
 	return equali(authBuffer, "+OK^r^n")
@@ -52,18 +52,18 @@ public redis_authenticate()
 
 public redis_publish(channel[], data[])
 {
-	new publishCommand[512], publishCommandSize, publishBuffer[512]
+	new publishCommand[512], fmtPublishCommand[512], publishCommandSize, publishBuffer[512]
 
-	format(publishCommand, 511, "PUBLISH test %s", data)
-	publishCommandSize = format_command_resp(publishCommand)
+	formatex(publishCommand, 511, "PUBLISH %s %s", channel, data)
+	publishCommandSize = format_command_resp(publishCommand, fmtPublishCommand)
 
-	//client_print(0, print_console, "Publish: %s", publishCommand)
+	//client_print(0, print_console, "Publish: %s", fmtPublishCommand)
 
 	if (redis_connect())
 	{
 		if (redis_authenticate())
 		{
-			redis_send(publishCommand, publishCommandSize)
+			redis_send(fmtPublishCommand, publishCommandSize)
 			redis_receive(publishBuffer)
 
 			return !equali(publishBuffer[0], ":")
@@ -95,32 +95,52 @@ public redis_disconnect()
 	socket_close(g_redis_socket)
 }
 
-stock format_command_resp(commandString[])
+format_command_resp(commandString[512], fmtCommandString[512])
 {
-	new pos, arg[240], fmtArg[256], fmtCommandString[512]
-	new commandArray = ArrayCreate(256), commandArraySize
+	new pos, arg[240], fmtArg[256]
+	new i = 0
 
 	while ((pos = argparse(commandString, pos, arg, sizeof(arg) - 1)) > -1)
 	{
-		formatex(fmtArg, sizeof(fmtArg) - 1, "$%d^r^n%s", strlen(arg), arg)
-		ArrayPushString(commandArray, fmtArg)
+		i++
+		formatex(fmtArg, sizeof(fmtArg) - 1, "$%d^r^n%s^r^n", strlen(arg), arg)
+		add(fmtCommandString, sizeof(fmtCommandString) - 1, fmtArg, strlen(fmtArg))
+
+		client_print(0, print_console, "fmtArg: %s", fmtArg)
+	}
+
+	formatex(fmtCommandString, sizeof(fmtCommandString) - 1, "*%d^r^n%s", i, commandString)
+
+	return strlen(fmtCommandString)
+}
+
+/*format_command_resp(commandString[512])
+{
+	new pos, arg[240], commandArray[4][256], commandArraySize
+	new i = 0
+
+	while ((pos = argparse(commandString, pos, arg, sizeof(arg) - 1)) > -1)
+	{
+		formatex(commandArray[i], 255, "$%d^r^n%s", strlen(arg), arg)
+		client_print(0, print_console, "arg: %s", arg)
+		i++
 	}
 
 	implode_strings(commandArray, commandArraySize, "^r^n", commandString, 511)
-	format(commandString, 511, "*%d^r^n%s^r^n", commandArraySize, commandString)
+	formatex(commandString, sizeof(commandString) - 1, "*%d^r^n%s^r^n", i, commandString)
 
 	return strlen(commandString)
-}
+}*/
 
-/*stock format_command_resp(commandString[512])
+/*format_command_resp(commandString[512])
 {
-	new commandArray[8][128], commandArraySize
+	new commandArray[4][256], commandArraySize
 
-	commandArraySize = explode_string(commandString, " ", commandArray, 8, 127)
+	commandArraySize = explode_string(commandString, " ", commandArray, 4, 255)
 
 	for (new i = 0; i < commandArraySize; i++)
 	{
-		format(commandArray[i], 127, "$%d^r^n%s", strlen(commandArray[i]), commandArray[i])
+		format(commandArray[i], 255, "$%d^r^n%s", strlen(commandArray[i]), commandArray[i])
 	}
 
 	implode_strings(commandArray, commandArraySize, "^r^n", commandString, 511)
