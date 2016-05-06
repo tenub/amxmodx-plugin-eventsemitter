@@ -37,10 +37,10 @@ public redis_connect()
 
 public redis_authenticate()
 {
-	new authCommand[512], fmtAuthCommand[512], authCommandSize, authBuffer[512]
+	new authCommand[512], fmtAuthCommand[512], fmtAuthCommandSize, authBuffer[512]
 
 	formatex(authCommand, 511, "AUTH %s", REDIS_PASS)
-	fmtAuthCommandSize = format_command_resp(authCommand, strlen(authCommand), fmtAuthCommand, sizeof(fmtAuthCommand) - 1)
+	fmtAuthCommandSize = format_command_resp(authCommand, fmtAuthCommand, sizeof(fmtAuthCommand) - 1)
 
 	//client_print(0, print_console, "Authenticate: %s", authCommand)
 
@@ -52,10 +52,10 @@ public redis_authenticate()
 
 public redis_publish(channel[], data[])
 {
-	new publishCommand[512], fmtPublishCommand[512], publishCommandSize, publishBuffer[512]
+	new publishCommand[512], fmtPublishCommand[512], fmtPublishCommandSize, publishBuffer[512]
 
 	formatex(publishCommand, 511, "PUBLISH %s %s", channel, data)
-	fmtPublishCommandSize = format_command_resp(publishCommand, strlen(publishCommand), fmtPublishCommand, sizeof(fmtPublishCommand) - 1)
+	fmtPublishCommandSize = format_command_resp(publishCommand, fmtPublishCommand, sizeof(fmtPublishCommand) - 1)
 
 	//client_print(0, print_console, "Publish: %s", fmtPublishCommand)
 
@@ -75,7 +75,7 @@ public redis_publish(channel[], data[])
 	return false
 }
 
-public redis_receive(buffer[])
+public redis_receive(buffer[512])
 {
 	if (socket_change(g_redis_socket))
 	{
@@ -95,7 +95,7 @@ public redis_disconnect()
 	socket_close(g_redis_socket)
 }
 
-format_command_resp(commandString[], commandStringLen, commandBuffer[], commandBufferSize)
+format_command_resp(commandString[], commandBuffer[], commandBufferSize)
 {
 	new pos, arg[240], fmtArg[256]
 	new i = 0

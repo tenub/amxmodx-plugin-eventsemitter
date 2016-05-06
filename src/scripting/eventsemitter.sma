@@ -28,7 +28,7 @@ public get_game_state()
 public client_authorized(id)
 {
 	new payload[512], authid[32], name[33], ip[32]
-	new bool:isAdmin = is_user_admin(id)
+	new isAdmin = is_user_admin(id)
 
 	get_user_name(id, name, 32)
 	get_user_authid(id, authid, 31)
@@ -39,7 +39,7 @@ public client_authorized(id)
 	redis_publish(g_ServerKey, payload)
 }
 
-public client_disconnect(id)
+public client_disconnected(id)
 {
 	new payload[512], authid[32]
 
@@ -71,7 +71,7 @@ public EventSay(id)
 	}
 
 	new payload[512], authid[32], name[33]
-	new bool:isAdmin = is_user_admin(id)
+	new isAdmin = is_user_admin(id)
 
 	get_user_name(id, name, 32)
 	get_user_authid(id, authid, 31)
