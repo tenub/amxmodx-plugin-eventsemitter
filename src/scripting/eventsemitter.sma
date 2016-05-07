@@ -3,7 +3,7 @@
 
 #include "include/redis.inc"
 
-new g_ServerIp[32], g_ServerKey[64], g_ServerMap[32]
+static g_ServerIp[32], g_ServerKey[64], g_ServerMap[32]
 
 public plugin_init()
 {
@@ -14,7 +14,7 @@ public plugin_init()
 
 public get_game_state()
 {
-	new payload[512]
+	static payload[512]
 
 	get_mapname(g_ServerMap, 31)
 	get_user_ip(0, g_ServerIp, 31)
@@ -27,7 +27,7 @@ public get_game_state()
 
 public client_authorized(id)
 {
-	new payload[512], authid[32], name[33], ip[32]
+	static payload[512], authid[32], name[33], ip[32]
 	new isAdmin = is_user_admin(id)
 
 	get_user_name(id, name, 32)
@@ -41,7 +41,7 @@ public client_authorized(id)
 
 public client_disconnected(id)
 {
-	new payload[512], authid[32]
+	static payload[512], authid[32]
 
 	get_user_authid(id, authid, 31)
 
@@ -52,7 +52,7 @@ public client_disconnected(id)
 
 public EventPlayerRank(table[9], map[32], authid[32], name[33], Float:time, date[20], weapon[7], cp, gc)
 {
-	new payload[512]
+	static payload[512]
 
 	formatex(payload, 511, "{^"table^":^"%s^",^"map^":^"%s^",^"authid^":^"%s^",^"name^":^"%s^",^"time^":%f,^"date^":^"%s^",^"weapon^":^"%s^",^"cp^":%i,^"gc^":%i}", table, map, authid, name, time, date, weapon, cp, gc)
 
@@ -61,7 +61,7 @@ public EventPlayerRank(table[9], map[32], authid[32], name[33], Float:time, date
 
 public EventSay(id)
 {
-	new text[193]
+	static text[193]
 
 	read_args(text, 192);
 
@@ -70,7 +70,7 @@ public EventSay(id)
 		return
 	}
 
-	new payload[512], authid[32], name[33]
+	static payload[512], authid[32], name[33]
 	new isAdmin = is_user_admin(id)
 
 	get_user_name(id, name, 32)
