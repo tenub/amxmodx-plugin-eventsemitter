@@ -4,10 +4,11 @@
 #define _redis_included
 
 #include <amxmodx>
-#include <sockets_hz>
+#include "sockets_hz"
 
 #include ".env.inc"
 
+new const CRLF[] = "^r^n"
 new g_redis_socket
 
 public redis_connect()
@@ -37,38 +38,29 @@ public redis_connect()
 
 public redis_authenticate()
 {
-	static args[4][256], fmtBuffer[2048], recvBuffer[512]
-	new fmtBufferLen
+	static command[512], commandSize, recvBuffer[512]
+	commandSize = format_command_resp(command, 511, "AUTH", REDIS_PASS)
 
-	copy(args[0], 255, REDIS_PASS)
+	//client_print(0, print_console, "Authenticate: %s", authCommand)
 
-	fmtBufferLen = format_command_resp("AUTH", args, fmtBuffer)
-
-	//server_print(0, print_console, "Authenticate: %s", fmtBuffer)
-
-	redis_send(fmtBuffer, fmtBufferLen)
+	redis_send(command, commandSize)
 	redis_receive(recvBuffer)
 
 	return equal(recvBuffer, "+OK^r^n")
 }
 
-public redis_publish(channel[64], data[512])
+public redis_publish(channel[], data[])
 {
-	static args[4][256], fmtBuffer[2048], recvBuffer[512]
-	new fmtBufferLen
+	static command[512], commandSize, recvBuffer[512]
+	commandSize = format_command_resp(command, 511, "PUBLISH", channel, data)
 
-	copy(args[0], 255, channel)
-	copy(args[1], 255, data)
-
-	fmtBufferLen = format_command_resp("PUBLISH", args, fmtBuffer)
-
-	//server_print(0, print_console, "Publish: %s", fmtBuffer)
+	//client_print(0, print_console, "Publish: %s", command)
 
 	if (redis_connect())
 	{
 		if (redis_authenticate())
 		{
-			redis_send(fmtBuffer, fmtBufferLen)
+			redis_send(command, commandSize)
 			redis_receive(recvBuffer)
 
 			return !equal(recvBuffer[0], ":")
@@ -87,12 +79,12 @@ public redis_receive(buffer[512])
 		socket_recv(g_redis_socket, buffer, sizeof(buffer) - 1)
 	}
 
-	//server_print(0, print_console, "Received: %s", buffer)
+	//client_print(0, print_console, "Received: %s", buffer)
 }
 
-public redis_send(command[2048], commandLen)
+public redis_send(command[], commandSize)
 {
-	socket_send(g_redis_socket, command, commandLen)
+	socket_send(g_redis_socket, command, commandSize)
 }
 
 public redis_disconnect()
@@ -100,23 +92,41 @@ public redis_disconnect()
 	socket_close(g_redis_socket)
 }
 
-format_command_resp(command[], args[4][256], fmtBuffer[2048])
+format_command_resp(buffer[], const bufferSize, ...)
 {
-	new fmtArg[320], tmpBuffer[2048], nArgs = 1
+	static arg[256], num[8]
+	new numArgs = numargs()
 
-	formatex(tmpBuffer, 2047, "$%d^r^n%s^r^n", strlen(command), command)
+	buffer[0] = 0
+	num_to_str(numArgs - 2, num, 7)
+	add(buffer, bufferSize, "*")
+	add(buffer, bufferSize, num)
+	add(buffer, bufferSize, CRLF)
 
-	for (new i = 0; i < 4; i++)
+	new pos, chr
+
+	for (new i = 2; i < numArgs; ++i)
 	{
-		if (strlen(args[i]))
+		pos = 0, chr = 0
+
+		while ((chr = getarg(i, pos)))
 		{
-			nArgs++
-			formatex(fmtArg, 319, "$%d^r^n%s^r^n", strlen(args[i]), args[i])
-			add(tmpBuffer, 2047, fmtArg, strlen(fmtArg))
+			arg[pos++] = chr
+
+			if (pos >= 255)
+			{
+				break
+			}
 		}
+
+		arg[pos++] = 0
+		num_to_str(strlen(arg), num, 7)
+		add(buffer, bufferSize, "$")
+		add(buffer, bufferSize, num)
+		add(buffer, bufferSize, CRLF)
+		add(buffer, bufferSize, arg)
+		add(buffer, bufferSize, CRLF)
 	}
 
-	formatex(fmtBuffer, 2047, "*%i^r^n%s", nArgs, tmpBuffer)
-
-	return strlen(fmtBuffer)
+	return strlen(buffer)
 }
