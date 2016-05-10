@@ -9,15 +9,20 @@
 #include ".env.inc"
 
 new const CRLF[] = "^r^n"
-new g_redis_socket
+new g_RedisSocket, g_RedisSocketListen
 
+/**
+ * Called by "redis_publish" to open a TCP connection with a remote server
+ *
+ * @return integer Socket
+ */
 public redis_connect()
 {
 	new error
 
-	g_redis_socket = socket_open(REDIS_HOST, REDIS_PORT, SOCKET_TCP, error)
+	g_RedisSocket = socket_open(REDIS_HOST, REDIS_PORT, SOCKET_TCP, error)
 
-	if (g_redis_socket <= 0)
+	if (g_RedisSocket <= 0)
 	{
 		switch (error)
 		{
@@ -33,69 +38,199 @@ public redis_connect()
 		}
 	}
 
-	return g_redis_socket
+	return g_RedisSocket
 }
 
+/**
+ * Called by "redis_subscribe" to open a listening TCP connection with a remote server
+ *
+ * @return integer Socket
+ */
+public redis_listen()
+{
+	new error
+
+	g_RedisSocketListen = socket_open(REDIS_HOST, REDIS_PORT, SOCKET_TCP, error)
+
+	if (g_RedisSocketListen <= 0)
+	{
+		switch (error)
+		{
+			case 1: {
+				server_print("Error creating listen socket")
+			}
+			case 2: {
+				server_print("Error resolving remote hostname for listen socket")
+			}
+			case 3: {
+				server_print("Error connecting listen socket")
+			}
+		}
+	}
+
+	return g_RedisSocketListen
+}
+
+/**
+ * Called by "redis_publish" to authenticate with the redis server
+ *
+ * @return boolean Success or failure from authentication attempt
+ */
 public redis_authenticate()
 {
 	static command[512], commandSize, recvBuffer[512]
+
 	commandSize = format_command_resp(command, 511, "AUTH", REDIS_PASS)
 
-	//client_print(0, print_console, "Authenticate: %s", authCommand)
+	redis_send(g_RedisSocket, command, commandSize)
+	redis_receive(g_RedisSocket, recvBuffer, 511)
 
-	redis_send(command, commandSize)
-	redis_receive(recvBuffer)
-
+	// check if redis server responds with success message
 	return equal(recvBuffer, "+OK^r^n")
 }
 
+/**
+ * Send a publish command to the redis server with supplied channel and message data
+ *
+ * @param string channel
+ * @param string data
+ *
+ * @return boolean False on redis error
+ */
 public redis_publish(channel[], data[])
 {
 	static command[512], commandSize, recvBuffer[512]
-	commandSize = format_command_resp(command, 511, "PUBLISH", channel, data)
 
-	//client_print(0, print_console, "Publish: %s", command)
+	commandSize = format_command_resp(command, 511, "PUBLISH", channel, data)
 
 	if (redis_connect())
 	{
 		if (redis_authenticate())
 		{
-			redis_send(command, commandSize)
-			redis_receive(recvBuffer)
+			redis_send(g_RedisSocket, command, commandSize)
+			redis_receive(g_RedisSocket, recvBuffer, 511)
 
-			return !equal(recvBuffer[0], ":")
+			// return false if response is an error, true otherwise
+			return recvBuffer[0] != '-')
 		}
 
-		redis_disconnect()
+		redis_disconnect(g_RedisSocket)
 	}
 
 	return false
 }
 
-public redis_receive(buffer[512])
+/**
+ * Open a listening connection and subscribe to supplied redis channel
+ *
+ * @param string channel
+ *
+ * @return boolean False on redis error
+ */
+public redis_subscribe(channel[])
 {
-	if (socket_change(g_redis_socket))
+	static listenBuffer[512], msgType[32], msgChannel[64], msgText[512]
+
+	if (redis_listen())
 	{
-		socket_recv(g_redis_socket, buffer, sizeof(buffer) - 1)
+		if (redis_authenticate())
+		{
+			redis_receive(g_RedisSocketListen, listenBuffer, 511)
+			parse_resp_data(listenBuffer, 511, msgType, msgChannel, msgText)
+
+			// do something with received data
+		}
 	}
 
-	//client_print(0, print_console, "Received: %s", buffer)
+	return g_RedisSocketListen
 }
 
-public redis_send(command[], commandSize)
+/**
+ * Release a redis connection
+ * Unsubscribe from all redis channels and close the connection
+ *
+ * @param integer socket
+ *
+ * @return boolean False on redis error
+ */
+public redis_release(socket)
 {
-	socket_send(g_redis_socket, command, commandSize)
+	static command[512], commandSize, recvBuffer[512]
+
+	commandSize = format_command_resp(command, 511, "UNSUBSCRIBE")
+
+	if (g_RedisSocketListen > 0)
+	{
+		redis_send(g_RedisSocketListen, command, commandSize)
+		redis_receive(g_RedisSocketListen, recvBuffer, 511)
+
+		if (recvBuffer[0] == '-')
+		{
+			server_print("Error unsubscribing")
+		}
+
+		redis_disconnect(g_RedisSocketListen)
+	}
 }
 
-public redis_disconnect()
+/**
+ * Receive a response from the redis server into a string buffer through specified socket
+ *
+ * @param integer socket
+ * @param string buffer
+ * @param integer bufferSize
+ */
+public redis_receive(socket, buffer[], const bufferSize)
 {
-	socket_close(g_redis_socket)
+	if (socket_change(socket))
+	{
+		socket_recv(socket, buffer, bufferSize)
+	}
 }
 
+/**
+ * Send a formatted string over a redis connection through specified socket
+ *
+ * @param integer socket
+ * @param string buffer
+ * @param integer commandSize
+ */
+public redis_send(socket, buffer[], const bufferSize)
+{
+	socket_send(socket, buffer, bufferSize)
+}
+
+/**
+ * Close a redis connection through specified socket
+ *
+ * @param integer socket
+ */
+public redis_disconnect(socket)
+{
+	socket_close(socket)
+}
+
+/**
+ * Format a variable number of arguments into a string buffer (for sending over redis connection)
+ * Prepare arguments into a single string using the RESP format
+ *
+ * @param string buffer
+ * @param integer bufferSize
+ * @param string arg,...
+ *
+ * @return integer Length of string buffer
+ */
 format_command_resp(buffer[], const bufferSize, ...)
 {
-	static arg[256], num[8]
 	new numArgs = numargs()
+
+	// do not format unless there are arguments
+	if (numArgs <= 2)
+	{
+		return false
+	}
+
+	static num[8], arg[256]
 
 	buffer[0] = 0
 	num_to_str(numArgs - 2, num, 7)
@@ -129,4 +264,50 @@ format_command_resp(buffer[], const bufferSize, ...)
 	}
 
 	return strlen(buffer)
+}
+
+/**
+ * Read and parse data in RESP format
+ *
+ * @param string buffer
+ * @param integer bufferSize
+
+ *
+ * @return string
+ */
+parse_resp_data(buffer[], const bufferSize, type[], channel[], text[]) {
+	static data[512]
+	new arg[512]
+
+	switch (buffer[0])
+	{
+		case '+': {
+			arg = trim(buffer[1])
+		}
+		case '-': {
+			arg = trim(buffer[1])
+		}
+		case ':': {
+			arg = str_to_num(trim(buffer[1]))
+		}
+		case '$': {
+			//
+		}
+		case '*': {
+			for (new i = 1; i < bufferSize; i++)
+			{
+				if (equal(arg, CRLF))
+				{
+
+					arg[0] = 0
+				}
+
+				else
+				{
+					arg[i] = buffer[i]
+				}
+			}
+		}
+		default: return false
+	}
 }
