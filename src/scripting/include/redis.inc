@@ -4,7 +4,7 @@
 #define _redis_included
 
 #include <amxmodx>
-#include "sockets_hz"
+#include <sockets_hz>
 
 #include ".env.inc"
 
@@ -50,7 +50,7 @@ public redis_listen()
 {
 	new error
 
-	g_RedisSocketListen = socket_open(REDIS_HOST, REDIS_PORT, SOCKET_TCP, error)
+	g_RedisSocketListen = socket_listen(REDIS_HOST, REDIS_PORT, SOCKET_TCP, error)
 
 	if (g_RedisSocketListen <= 0)
 	{
@@ -111,7 +111,7 @@ public redis_publish(channel[], data[])
 			redis_receive(g_RedisSocket, recvBuffer, 511)
 
 			// return false if response is an error, true otherwise
-			return recvBuffer[0] != '-')
+			return recvBuffer[0] != '-'
 		}
 
 		redis_disconnect(g_RedisSocket)
@@ -122,28 +122,33 @@ public redis_publish(channel[], data[])
 
 /**
  * Open a listening connection and subscribe to supplied redis channel
+ * Dump data to listenBuffer
  *
  * @param string channel
+ * @param string msgType
+ * @param string msgChannel
+ * @param string msgText
  *
  * @return boolean False on redis error
  */
-public redis_subscribe(channel[])
+/*public redis_subscribe(channel[], msgType[], msgChannel[], msgText[])
 {
-	static listenBuffer[512], msgType[32], msgChannel[64], msgText[512]
+	static command[512], commandSize, listenBuffer[512]
+
+	commandSize = format_command_resp(command, 511, "SUBSCRIBE", channel)
 
 	if (redis_listen())
 	{
 		if (redis_authenticate())
 		{
+			redis_send(g_RedisSocketListen, command, commandSize)
 			redis_receive(g_RedisSocketListen, listenBuffer, 511)
 			parse_resp_data(listenBuffer, 511, msgType, msgChannel, msgText)
-
-			// do something with received data
 		}
 	}
 
 	return g_RedisSocketListen
-}
+}*/
 
 /**
  * Release a redis connection
@@ -153,7 +158,7 @@ public redis_subscribe(channel[])
  *
  * @return boolean False on redis error
  */
-public redis_release(socket)
+/*public redis_release(socket)
 {
 	static command[512], commandSize, recvBuffer[512]
 
@@ -171,7 +176,7 @@ public redis_release(socket)
 
 		redis_disconnect(g_RedisSocketListen)
 	}
-}
+}*/
 
 /**
  * Receive a response from the redis server into a string buffer through specified socket
@@ -275,39 +280,26 @@ format_command_resp(buffer[], const bufferSize, ...)
  *
  * @return string
  */
-parse_resp_data(buffer[], const bufferSize, type[], channel[], text[]) {
+/*parse_resp_data(buffer[], const bufferSize, type[], channel[], text[]) {
 	static data[512]
 	new arg[512]
 
 	switch (buffer[0])
 	{
-		case '+': {
-			arg = trim(buffer[1])
+		case 43: { // +
+			//parse_resp_simple_string(buffer[1])
 		}
-		case '-': {
-			arg = trim(buffer[1])
+		case 36: { // $
+			//parse_resp_bulk_string(buffer[1])
 		}
-		case ':': {
-			arg = str_to_num(trim(buffer[1]))
+		case 42: { // *
+			//parse_resp_array(buffer[1])
 		}
-		case '$': {
-			//
+		case 58: { // :
+			//parse_resp_integer(buffer[1])
 		}
-		case '*': {
-			for (new i = 1; i < bufferSize; i++)
-			{
-				if (equal(arg, CRLF))
-				{
-
-					arg[0] = 0
-				}
-
-				else
-				{
-					arg[i] = buffer[i]
-				}
-			}
+		case 45: { // -
+			//parse_resp_error(buffer[1])
 		}
-		default: return false
 	}
-}
+}*/

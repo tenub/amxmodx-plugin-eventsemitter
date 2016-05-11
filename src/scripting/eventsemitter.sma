@@ -4,10 +4,12 @@
 #include "include/redis.inc"
 
 static g_ServerIp[32], g_ServerName[33]
-new g_Subscriber // alias for "g_RedisSocketListen"
+//new g_Subscriber
 
 public plugin_init()
 {
+	//static g_MsgType[32], g_MsgChannel[64], g_MsgText[512]
+
 	register_plugin("Server events emitter", "1.0", "pvab")
 
 	// register event handlers
@@ -15,7 +17,7 @@ public plugin_init()
 	register_clcmd("say_team", "EventSayTeam")
 
 	// subscribe to web chat channel
-	g_Subscriber = redis_subscribe("webchat")
+	//g_Subscriber = redis_subscribe("webchat", g_MsgType, g_MsgChannel, g_MsgText)
 
 	// get current game state of server and publish
 	get_game_state()
@@ -24,7 +26,7 @@ public plugin_init()
 public plugin_end()
 {
 	// unsubscribe from all channels and free subscriber handle
-	redis_release(g_Subscriber)
+	//redis_release(g_Subscriber)
 }
 
 /**
