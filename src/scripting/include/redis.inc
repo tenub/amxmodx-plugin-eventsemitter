@@ -7,6 +7,7 @@
 #include <sockets_hz>
 
 #include ".env.inc"
+#include "resp.inc"
 
 new const CRLF[] = "^r^n"
 new g_RedisSocket, g_RedisSocketListen
@@ -78,15 +79,16 @@ public redis_listen()
  */
 public redis_authenticate()
 {
-	static command[512], commandSize, recvBuffer[512]
+	static command[512], commandSize, recvBuffer[512], response[1][512], responseSuccess
 
 	commandSize = format_command_resp(command, 511, "AUTH", REDIS_PASS)
 
 	redis_send(g_RedisSocket, command, commandSize)
 	redis_receive(g_RedisSocket, recvBuffer, 511)
+	responseSuccess = parse_resp_data(recvBuffer, 511, response, 1, 511)
 
 	// check if redis server responds with success message
-	return equal(recvBuffer, "+OK^r^n")
+	return responseSuccess && equal(response, "OK")
 }
 
 /**
@@ -99,7 +101,7 @@ public redis_authenticate()
  */
 public redis_publish(channel[], data[])
 {
-	static command[512], commandSize, recvBuffer[512]
+	static command[512], commandSize, recvBuffer[512], response[1][512], responseSuccess
 
 	commandSize = format_command_resp(command, 511, "PUBLISH", channel, data)
 
@@ -109,15 +111,13 @@ public redis_publish(channel[], data[])
 		{
 			redis_send(g_RedisSocket, command, commandSize)
 			redis_receive(g_RedisSocket, recvBuffer, 511)
-
-			// return false if response is an error, true otherwise
-			return recvBuffer[0] != '-'
+			responseSuccess = parse_resp_data(recvBuffer, 511, response, 1, 511)
 		}
 
 		redis_disconnect(g_RedisSocket)
 	}
 
-	return false
+	return responseSuccess
 }
 
 /**
@@ -214,92 +214,3 @@ public redis_disconnect(socket)
 {
 	socket_close(socket)
 }
-
-/**
- * Format a variable number of arguments into a string buffer (for sending over redis connection)
- * Prepare arguments into a single string using the RESP format
- *
- * @param string buffer
- * @param integer bufferSize
- * @param string arg,...
- *
- * @return integer Length of string buffer
- */
-format_command_resp(buffer[], const bufferSize, ...)
-{
-	new numArgs = numargs()
-
-	// do not format unless there are arguments
-	if (numArgs <= 2)
-	{
-		return false
-	}
-
-	static num[8], arg[256]
-
-	buffer[0] = 0
-	num_to_str(numArgs - 2, num, 7)
-	add(buffer, bufferSize, "*")
-	add(buffer, bufferSize, num)
-	add(buffer, bufferSize, CRLF)
-
-	new pos, chr
-
-	for (new i = 2; i < numArgs; ++i)
-	{
-		pos = 0, chr = 0
-
-		while ((chr = getarg(i, pos)))
-		{
-			arg[pos++] = chr
-
-			if (pos >= 255)
-			{
-				break
-			}
-		}
-
-		arg[pos++] = 0
-		num_to_str(strlen(arg), num, 7)
-		add(buffer, bufferSize, "$")
-		add(buffer, bufferSize, num)
-		add(buffer, bufferSize, CRLF)
-		add(buffer, bufferSize, arg)
-		add(buffer, bufferSize, CRLF)
-	}
-
-	return strlen(buffer)
-}
-
-/**
- * Read and parse data in RESP format
- *
- * @param string buffer
- * @param integer bufferSize
-
- *
- * @return string
- */
-/*parse_resp_data(buffer[], const bufferSize, type[], channel[], text[]) {
-	static data[512]
-	new arg[512]
-
-	switch (buffer[0])
-	{
-		case 43: { // +
-			//parse_resp_simple_string(buffer[1])
-		}
-		case 36: { // $
-			//parse_resp_bulk_string(buffer[1])
-		}
-		case 42: { // *
-			//parse_resp_array(buffer[1])
-		}
-		case 58: { // :
-			//parse_resp_integer(buffer[1])
-		}
-		case 45: { // -
-			//parse_resp_error(buffer[1])
-		}
-	}
-}*/
