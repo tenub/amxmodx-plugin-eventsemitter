@@ -1,3 +1,12 @@
+#pragma semicolon 1
+
+#if defined _resp_included
+	#endinput
+#endif
+#define _resp_included
+
+new const CRLF[] = "^r^n";
+
 /**
  * Format a variable number of arguments into a string buffer (for sending over redis connection)
  * Prepare arguments into a single string using the RESP format
@@ -10,48 +19,48 @@
  */
 format_command_resp(buffer[], const bufferSize, ...)
 {
-	new numArgs = numargs()
+	new numArgs = numargs();
 
 	// do not format unless there are arguments
 	if (numArgs <= 2)
 	{
-		return false
+		return false;
 	}
 
-	static num[8], arg[256]
+	static num[8], arg[256];
 
-	buffer[0] = 0
-	num_to_str(numArgs - 2, num, 7)
-	add(buffer, bufferSize, "*")
-	add(buffer, bufferSize, num)
-	add(buffer, bufferSize, CRLF)
+	buffer[0] = 0;
+	num_to_str(numArgs - 2, num, 7);
+	add(buffer, bufferSize, "*");
+	add(buffer, bufferSize, num);
+	add(buffer, bufferSize, CRLF);
 
-	new pos, chr
+	new pos, chr;
 
 	for (new i = 2; i < numArgs; ++i)
 	{
-		pos = 0, chr = 0
+		pos = 0, chr = 0;
 
 		while ((chr = getarg(i, pos)))
 		{
-			arg[pos++] = chr
+			arg[pos++] = chr;
 
 			if (pos >= 255)
 			{
-				break
+				break;
 			}
 		}
 
-		arg[pos++] = 0
-		num_to_str(strlen(arg), num, 7)
-		add(buffer, bufferSize, "$")
-		add(buffer, bufferSize, num)
-		add(buffer, bufferSize, CRLF)
-		add(buffer, bufferSize, arg)
-		add(buffer, bufferSize, CRLF)
+		arg[pos++] = 0;
+		num_to_str(strlen(arg), num, 7);
+		add(buffer, bufferSize, "$");
+		add(buffer, bufferSize, num);
+		add(buffer, bufferSize, CRLF);
+		add(buffer, bufferSize, arg);
+		add(buffer, bufferSize, CRLF);
 	}
 
-	return strlen(buffer)
+	return strlen(buffer);
 }
 
 /**
@@ -65,107 +74,94 @@ format_command_resp(buffer[], const bufferSize, ...)
  *
  * @return string
  */
-bool:parse_resp_data(data[], const dataSize, buffer[][], bufferCount, bufferSize) {
-	static success, error[64]
+parse_resp_data(data[], respData[])
+{
+	new respType, error[512];
 
 	switch (data[0])
 	{
 		// + simple string
 		case 43: {
-			success = parse_resp_simple_string(data[1], dataSize - 1, buffer, bufferCount, bufferSize, error)
+			respType = parse_resp_simple_string(data[1], respData);
 		}
 		// $ bulk string
-		case 36: {
-			success = parse_resp_bulk_string(data[1], dataSize - 1, buffer, bufferCount, bufferSize, error)
+		/*case 36: {
+			respType = parse_resp_bulk_string(data[1], respData, error, 511);
 		}
 		// * array
 		case 42: {
-			success = parse_resp_array(data[1], dataSize - 1, buffer, bufferCount, bufferSize, error)
-		}
+			respType = parse_resp_array(data[1], respData, error, 511);
+		}*/
 		// : integer
 		case 58: {
-			success = parse_resp_integer(data[1], dataSize - 1, buffer, bufferCount, bufferSize, error)
+			respType = parse_resp_integer(data[1], respData, error, 511);
 		}
 		// - error
 		case 45: {
-			success = parse_resp_error(data[1], dataSize - 1, buffer, bufferCount, bufferSize, error)
-			server_print(buffer)
+			respType = parse_resp_error(data[1], respData, error, 511);
 		}
 	}
 
-	if (!success)
+	if (!respType)
 	{
-		server_print(error)
+		server_print(error);
 	}
 
-	return success
+	return respType;
 }
 
-bool:parse_resp_simple_string(data[], const dataSize, buffer, const bufferCount, const bufferSize, error[])
+parse_resp_integer(data[], respData[], error[], errorSize)
 {
-	new i, arg[511]
+	new i;
 
-	while (data[i++])
+	while (data[i])
 	{
-		// buffer is terminated by CRLF, so "arg" is now fully parsed
-		if (data[i] == 13 && data[i + 1] == 10)
-		{
-			break
-		}
-
-		// add each character to "arg" string if not at end of data
-		add(arg, 510, data[i], 1)
-	}
-
-	copy(buffer[0], bufferSize, arg)
-
-	return true
-}
-
-bool:parse_resp_bulk_string(data[], const dataSize, buffer, const bufferCount, const bufferSize, error[]) {}
-
-bool:parse_resp_array(data[], const dataSize, buffer, const bufferCount, const bufferSize, error[]) {}
-
-bool:parse_resp_integer(data[], const dataSize, buffer, const bufferCount, const bufferSize, error[])
-{
-	new i, arg[511]
-
-	if (bufferCount != 1)
-	{
-		error = "Integer response expected"
-
-		return false
-	}
-
-	while (data[i++])
-	{
-		// buffer is terminated by CRLF, so "arg" is now fully parsed
-		if (data[i] == 13 && data[i + 1] == 10)
-		{
-			break
-		}
-
-		// throw error if data contains a non-integer value and reset "arg" value
 		if (data[i] < 48 || data[i] > 57)
 		{
-			arg[0] = 0
-			error = "Data is not an integer"
+			respData[0] = 0;
+			copy(error, errorSize, "Non-integer response");
 
-			return false
+			return 0;
 		}
 
-		// add each character to "arg" string if not at end of data
-		add(arg, 510, data[i], 1)
+		if (data[i] == 13 && data[i + 1] == 10)
+		{
+			break;
+		}
+
+		add(respData, 510, data[i], 1);
+		i++;
 	}
 
-	str_to_num(arg)
-	copy(buffer[0], bufferSize, arg)
-
-	// convert "arg" to integer since it contains only digits and return success/failure
-	return true
+	return 1;
 }
 
-bool:parse_resp_error(data[], const dataSize, buffer, const bufferCount, const bufferSize, error[])
+parse_resp_simple_string(data[], respData[])
 {
-	return parse_resp_simple_string(data, dataSize, buffer, bufferSize, error))
+	new i;
+
+	while (data[i])
+	{
+		if (data[i] == 13 && data[i + 1] == 10)
+		{
+			break;
+		}
+
+		add(respData, 510, data[i], 1);
+		i++;
+	}
+
+	return 2;
+}
+
+/*parse_resp_bulk_string(data[], respData[], error[], errorSize) {}
+
+parse_resp_array(data[], respData[], error[], errorSize) {}*/
+
+parse_resp_error(data[], respData[], error[], errorSize)
+{
+	parse_resp_simple_string(data, respData);
+	copy(error, errorSize, respData);
+
+	return 0;
 }

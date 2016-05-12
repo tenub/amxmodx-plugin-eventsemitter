@@ -1,3 +1,5 @@
+#pragma semicolon 1
+
 #if defined _redis_included
 	#endinput
 #endif
@@ -9,8 +11,7 @@
 #include ".env.inc"
 #include "resp.inc"
 
-new const CRLF[] = "^r^n"
-new g_RedisSocket, g_RedisSocketListen
+new g_RedisSocket, g_RedisSocketListen;
 
 /**
  * Called by "redis_publish" to open a TCP connection with a remote server
@@ -19,27 +20,27 @@ new g_RedisSocket, g_RedisSocketListen
  */
 public redis_connect()
 {
-	new error
+	new error;
 
-	g_RedisSocket = socket_open(REDIS_HOST, REDIS_PORT, SOCKET_TCP, error)
+	g_RedisSocket = socket_open(REDIS_HOST, REDIS_PORT, SOCKET_TCP, error);
 
 	if (g_RedisSocket <= 0)
 	{
 		switch (error)
 		{
 			case 1: {
-				server_print("Error creating socket")
+				server_print("Error creating socket");
 			}
 			case 2: {
-				server_print("Error resolving remote hostname")
+				server_print("Error resolving remote hostname");
 			}
 			case 3: {
-				server_print("Error connecting socket")
+				server_print("Error connecting socket");
 			}
 		}
 	}
 
-	return g_RedisSocket
+	return g_RedisSocket;
 }
 
 /**
@@ -49,27 +50,27 @@ public redis_connect()
  */
 public redis_listen()
 {
-	new error
+	new error;
 
-	g_RedisSocketListen = socket_listen(REDIS_HOST, REDIS_PORT, SOCKET_TCP, error)
+	g_RedisSocketListen = socket_listen(REDIS_HOST, REDIS_PORT, SOCKET_TCP, error);
 
 	if (g_RedisSocketListen <= 0)
 	{
 		switch (error)
 		{
 			case 1: {
-				server_print("Error creating listen socket")
+				server_print("Error creating listen socket");
 			}
 			case 2: {
-				server_print("Error resolving remote hostname for listen socket")
+				server_print("Error resolving remote hostname for listen socket");
 			}
 			case 3: {
-				server_print("Error connecting listen socket")
+				server_print("Error connecting listen socket");
 			}
 		}
 	}
 
-	return g_RedisSocketListen
+	return g_RedisSocketListen;
 }
 
 /**
@@ -79,16 +80,18 @@ public redis_listen()
  */
 public redis_authenticate()
 {
-	static command[512], commandSize, recvBuffer[512], response[1][512], responseSuccess
+	static command[512], commandSize, recvBuffer[512];
+	new respType, respData[512];
 
-	commandSize = format_command_resp(command, 511, "AUTH", REDIS_PASS)
+	commandSize = format_command_resp(command, 511, "AUTH", REDIS_PASS);
 
-	redis_send(g_RedisSocket, command, commandSize)
-	redis_receive(g_RedisSocket, recvBuffer, 511)
-	responseSuccess = parse_resp_data(recvBuffer, 511, response, 1, 511)
+	redis_send(g_RedisSocket, command, commandSize);
+	redis_receive(g_RedisSocket, recvBuffer, 511);
+
+	respType = parse_resp_data(recvBuffer, respData);
 
 	// check if redis server responds with success message
-	return responseSuccess && equal(response, "OK")
+	return respType > 0 && equal(respData, "OK");
 }
 
 /**
@@ -101,23 +104,25 @@ public redis_authenticate()
  */
 public redis_publish(channel[], data[])
 {
-	static command[512], commandSize, recvBuffer[512], response[1][512], responseSuccess
+	static command[512], commandSize, recvBuffer[512];
+	new respType, respData[512];
 
-	commandSize = format_command_resp(command, 511, "PUBLISH", channel, data)
+	commandSize = format_command_resp(command, 511, "PUBLISH", channel, data);
 
 	if (redis_connect())
 	{
 		if (redis_authenticate())
 		{
-			redis_send(g_RedisSocket, command, commandSize)
-			redis_receive(g_RedisSocket, recvBuffer, 511)
-			responseSuccess = parse_resp_data(recvBuffer, 511, response, 1, 511)
+			redis_send(g_RedisSocket, command, commandSize);
+			redis_receive(g_RedisSocket, recvBuffer, 511);
+
+			respType = parse_resp_data(recvBuffer, respData);
 		}
 
-		redis_disconnect(g_RedisSocket)
+		redis_disconnect(g_RedisSocket);
 	}
 
-	return responseSuccess
+	return respType == 1 && str_to_num(respData) >= 0;
 }
 
 /**
@@ -189,7 +194,7 @@ public redis_receive(socket, buffer[], const bufferSize)
 {
 	if (socket_change(socket))
 	{
-		socket_recv(socket, buffer, bufferSize)
+		socket_recv(socket, buffer, bufferSize);
 	}
 }
 
@@ -202,7 +207,7 @@ public redis_receive(socket, buffer[], const bufferSize)
  */
 public redis_send(socket, buffer[], const bufferSize)
 {
-	socket_send(socket, buffer, bufferSize)
+	socket_send(socket, buffer, bufferSize);
 }
 
 /**
@@ -212,5 +217,5 @@ public redis_send(socket, buffer[], const bufferSize)
  */
 public redis_disconnect(socket)
 {
-	socket_close(socket)
+	socket_close(socket);
 }
