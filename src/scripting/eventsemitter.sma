@@ -1,11 +1,8 @@
-#pragma semicolon 1
-
 #include <amxmodx>
 #include <amxmisc>
+#include <redis>
 
-#include "include/redis.inc"
-
-static g_ServerIp[32], g_ServerName[33];
+new g_ServerIp[32], g_ServerName[33];
 //new g_Subscriber
 
 public plugin_init()
@@ -29,33 +26,6 @@ public plugin_end()
 {
 	// unsubscribe from all channels and free subscriber handle
 	//redis_release(g_Subscriber);
-}
-
-/**
- * This function is called upon server init (when map has changed and plugins load)
- * Parse and prepare a server init message to publish over redis connection
- */
-public get_game_state()
-{
-	static payload[512], maxPlayers, map[32];
-
-	// get server info to send with init message
-	get_user_ip(0, g_ServerIp, 31); // server ip+port
-	get_user_name(0, g_ServerName, 32); // server hostname
-	get_mapname(map, 31); // current map
-
-	// get max players server setting
-	maxPlayers = get_maxplayers();
-
-	//new players[maxPlayers], numPlayers;
-
-	//get_players(players, numPlayers, "chi");
-
-	// format values to a single JSON string (payload)
-	formatex(payload, 511, "{^"server^":^"%s^",^"map^":^"%s^",^"maxplayers^":%i}", g_ServerIp, map, maxPlayers);
-
-	// publish JSON to redis servers channel
-	redis_publish("servers", payload);
 }
 
 /**
@@ -222,6 +192,33 @@ public EventSayTeam(id)
 
 	// publish JSON to redis chat channel
 	redis_publish("chat", payload);
+}
+
+/**
+ * This function is called upon server init (when map has changed and plugins load)
+ * Parse and prepare a server init message to publish over redis connection
+ */
+get_game_state()
+{
+	static payload[512], maxPlayers, map[32];
+
+	// get server info to send with init message
+	get_user_ip(0, g_ServerIp, 31); // server ip+port
+	get_user_name(0, g_ServerName, 32); // server hostname
+	get_mapname(map, 31); // current map
+
+	// get max players server setting
+	maxPlayers = get_maxplayers();
+
+	//new players[maxPlayers], numPlayers;
+
+	//get_players(players, numPlayers, "chi");
+
+	// format values to a single JSON string (payload)
+	formatex(payload, 511, "{^"server^":^"%s^",^"map^":^"%s^",^"maxplayers^":%i}", g_ServerIp, map, maxPlayers);
+
+	// publish JSON to redis servers channel
+	redis_publish("servers", payload);
 }
 
 /**

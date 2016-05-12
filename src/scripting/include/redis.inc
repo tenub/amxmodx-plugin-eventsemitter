@@ -1,5 +1,3 @@
-#pragma semicolon 1
-
 #if defined _redis_included
 	#endinput
 #endif
@@ -7,92 +5,10 @@
 
 #include <amxmodx>
 #include <sockets_hz>
-
-#include ".env.inc"
-#include "resp.inc"
+#include <resp>
+#include <.env>
 
 new g_RedisSocket, g_RedisSocketListen;
-
-/**
- * Called by "redis_publish" to open a TCP connection with a remote server
- *
- * @return integer Socket
- */
-public redis_connect()
-{
-	new error;
-
-	g_RedisSocket = socket_open(REDIS_HOST, REDIS_PORT, SOCKET_TCP, error);
-
-	if (g_RedisSocket <= 0)
-	{
-		switch (error)
-		{
-			case 1: {
-				server_print("Error creating socket");
-			}
-			case 2: {
-				server_print("Error resolving remote hostname");
-			}
-			case 3: {
-				server_print("Error connecting socket");
-			}
-		}
-	}
-
-	return g_RedisSocket;
-}
-
-/**
- * Called by "redis_subscribe" to open a listening TCP connection with a remote server
- *
- * @return integer Socket
- */
-public redis_listen()
-{
-	new error;
-
-	g_RedisSocketListen = socket_listen(REDIS_HOST, REDIS_PORT, SOCKET_TCP, error);
-
-	if (g_RedisSocketListen <= 0)
-	{
-		switch (error)
-		{
-			case 1: {
-				server_print("Error creating listen socket");
-			}
-			case 2: {
-				server_print("Error resolving remote hostname for listen socket");
-			}
-			case 3: {
-				server_print("Error connecting listen socket");
-			}
-		}
-	}
-
-	return g_RedisSocketListen;
-}
-
-/**
- * Called by "redis_publish" to authenticate with the redis server
- *
- * @return boolean Success or failure from authentication attempt
- */
-public redis_authenticate()
-{
-	static command[512], commandSize, recvBuffer[512];
-	new respType, respData[512];
-
-	commandSize = format_command_resp(command, 511, "AUTH", REDIS_PASS);
-
-	redis_send(g_RedisSocket, command, commandSize);
-	redis_receive(g_RedisSocket, recvBuffer, 511);
-
-	respType = parse_resp_data(recvBuffer, respData);
-
-	// check if redis server responds with success message
-	return respType > 0 && equal(respData, "OK");
-}
 
 /**
  * Send a publish command to the redis server with supplied channel and message data
@@ -102,7 +18,7 @@ public redis_authenticate()
  *
  * @return boolean False on redis error
  */
-public redis_publish(channel[], data[])
+redis_publish(channel[], data[])
 {
 	static command[512], commandSize, recvBuffer[512];
 	new respType, respData[512];
@@ -136,7 +52,7 @@ public redis_publish(channel[], data[])
  *
  * @return boolean False on redis error
  */
-/*public redis_subscribe(channel[], msgType[], msgChannel[], msgText[])
+/*redis_subscribe(channel[], msgType[], msgChannel[], msgText[])
 {
 	static command[512], commandSize, listenBuffer[512]
 
@@ -163,7 +79,7 @@ public redis_publish(channel[], data[])
  *
  * @return boolean False on redis error
  */
-/*public redis_release(socket)
+/*redis_release(socket)
 {
 	static command[512], commandSize, recvBuffer[512]
 
@@ -184,13 +100,94 @@ public redis_publish(channel[], data[])
 }*/
 
 /**
+ * Called by "redis_publish" to authenticate with the redis server
+ *
+ * @return boolean Success or failure from authentication attempt
+ */
+stock redis_authenticate()
+{
+	static command[512], commandSize, recvBuffer[512];
+	new respType, respData[512];
+
+	commandSize = format_command_resp(command, 511, "AUTH", REDIS_PASS);
+
+	redis_send(g_RedisSocket, command, commandSize);
+	redis_receive(g_RedisSocket, recvBuffer, 511);
+
+	respType = parse_resp_data(recvBuffer, respData);
+
+	// check if redis server responds with success message
+	return respType > 0 && equal(respData, "OK");
+}
+
+/**
+ * Called by "redis_publish" to open a TCP connection with a remote server
+ *
+ * @return integer Socket
+ */
+stock redis_connect()
+{
+	new error;
+
+	g_RedisSocket = socket_open(REDIS_HOST, REDIS_PORT, SOCKET_TCP, error);
+
+	if (g_RedisSocket <= 0)
+	{
+		switch (error)
+		{
+			case 1: {
+				server_print("Error creating socket");
+			}
+			case 2: {
+				server_print("Error resolving remote hostname");
+			}
+			case 3: {
+				server_print("Error connecting socket");
+			}
+		}
+	}
+
+	return g_RedisSocket;
+}
+
+/**
+ * Called by "redis_subscribe" to open a listening TCP connection with a remote server
+ *
+ * @return integer Socket
+ */
+stock redis_listen()
+{
+	new error;
+
+	g_RedisSocketListen = socket_listen(REDIS_HOST, REDIS_PORT, SOCKET_TCP, error);
+
+	if (g_RedisSocketListen <= 0)
+	{
+		switch (error)
+		{
+			case 1: {
+				server_print("Error creating listen socket");
+			}
+			case 2: {
+				server_print("Error resolving remote hostname for listen socket");
+			}
+			case 3: {
+				server_print("Error connecting listen socket");
+			}
+		}
+	}
+
+	return g_RedisSocketListen;
+}
+
+/**
  * Receive a response from the redis server into a string buffer through specified socket
  *
  * @param integer socket
  * @param string buffer
  * @param integer bufferSize
  */
-public redis_receive(socket, buffer[], const bufferSize)
+stock redis_receive(socket, buffer[], const bufferSize)
 {
 	if (socket_change(socket))
 	{
@@ -205,7 +202,7 @@ public redis_receive(socket, buffer[], const bufferSize)
  * @param string buffer
  * @param integer commandSize
  */
-public redis_send(socket, buffer[], const bufferSize)
+stock redis_send(socket, buffer[], const bufferSize)
 {
 	socket_send(socket, buffer, bufferSize);
 }
@@ -215,7 +212,7 @@ public redis_send(socket, buffer[], const bufferSize)
  *
  * @param integer socket
  */
-public redis_disconnect(socket)
+stock redis_disconnect(socket)
 {
 	socket_close(socket);
 }

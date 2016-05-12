@@ -1,5 +1,3 @@
-#pragma semicolon 1
-
 #if defined _resp_included
 	#endinput
 #endif
@@ -8,8 +6,8 @@
 new const CRLF[] = "^r^n";
 
 /**
- * Format a variable number of arguments into a string buffer (for sending over redis connection)
- * Prepare arguments into a single string using the RESP format
+ * Format a variable number of arguments into a string buffer
+ * for sending over redis connection using the RESP format
  *
  * @param string buffer
  * @param integer bufferSize
@@ -64,15 +62,18 @@ format_command_resp(buffer[], const bufferSize, ...)
 }
 
 /**
- * Read and parse data in RESP format
+ * Read and parse data from RESP format
+ * Returns data type:
+ * 0 - error
+ * 1 - integer
+ * 2 - simple string
+ * 3 - bulk string
+ * 4 - array
  *
  * @param string data
- * @param integer dataSize
- * @param array buffer
- * @param integer bufferSize
-
+ * @param string respData
  *
- * @return string
+ * @return integer
  */
 parse_resp_data(data[], respData[])
 {
@@ -85,13 +86,13 @@ parse_resp_data(data[], respData[])
 			respType = parse_resp_simple_string(data[1], respData);
 		}
 		// $ bulk string
-		/*case 36: {
+		case 36: {
 			respType = parse_resp_bulk_string(data[1], respData, error, 511);
 		}
 		// * array
 		case 42: {
 			respType = parse_resp_array(data[1], respData, error, 511);
-		}*/
+		}
 		// : integer
 		case 58: {
 			respType = parse_resp_integer(data[1], respData, error, 511);
@@ -110,7 +111,7 @@ parse_resp_data(data[], respData[])
 	return respType;
 }
 
-parse_resp_integer(data[], respData[], error[], errorSize)
+stock parse_resp_integer(data[], respData[], error[], errorSize)
 {
 	new i;
 
@@ -136,7 +137,7 @@ parse_resp_integer(data[], respData[], error[], errorSize)
 	return 1;
 }
 
-parse_resp_simple_string(data[], respData[])
+stock parse_resp_simple_string(data[], respData[])
 {
 	new i;
 
@@ -154,11 +155,33 @@ parse_resp_simple_string(data[], respData[])
 	return 2;
 }
 
-/*parse_resp_bulk_string(data[], respData[], error[], errorSize) {}
+// 5\r\nstring\r\n
+stock parse_resp_bulk_string(data[], respData[], error[], errorSize) {
+	new i, strLen[4];
 
-parse_resp_array(data[], respData[], error[], errorSize) {}*/
+	while (data[i])
+	{
+		if (data[i] >= 48 && data[i] <= 57)
+		{
+			strLen[];
+			continue;
+		}
 
-parse_resp_error(data[], respData[], error[], errorSize)
+		if (data[i] == 13 && data[i + 1] == 10)
+		{
+			break;
+		}
+
+		add(respData, 510, data[i], 1);
+		i++;
+	}
+
+	return 1;
+}
+
+stock parse_resp_array(data[], respData[], error[], errorSize) {}
+
+stock parse_resp_error(data[], respData[], error[], errorSize)
 {
 	parse_resp_simple_string(data, respData);
 	copy(error, errorSize, respData);
