@@ -81,31 +81,22 @@ parse_resp_data(data[], respData[])
 
 	switch (data[0])
 	{
-		// + simple string
-		case 43: {
+		case '+': {
 			respType = parse_resp_simple_string(data[1], respData);
 		}
-		// $ bulk string
-		case 36: {
+		case '$': {
 			respType = parse_resp_bulk_string(data[1], respData, error, 511);
 		}
-		// * array
-		case 42: {
+		case '*': {
 			respType = parse_resp_array(data[1], respData, error, 511);
 		}
-		// : integer
-		case 58: {
+		case ':': {
 			respType = parse_resp_integer(data[1], respData, error, 511);
 		}
-		// - error
-		case 45: {
+		case '-': {
 			respType = parse_resp_error(data[1], respData, error, 511);
 		}
-	}
-
-	if (!respType)
-	{
-		server_print(error);
+		default: server_print(error);
 	}
 
 	return respType;
@@ -155,29 +146,7 @@ stock parse_resp_simple_string(data[], respData[])
 	return 2;
 }
 
-// 5\r\nstring\r\n
-stock parse_resp_bulk_string(data[], respData[], error[], errorSize) {
-	new i, strLen[4];
-
-	while (data[i])
-	{
-		if (data[i] >= 48 && data[i] <= 57)
-		{
-			strLen[];
-			continue;
-		}
-
-		if (data[i] == 13 && data[i + 1] == 10)
-		{
-			break;
-		}
-
-		add(respData, 510, data[i], 1);
-		i++;
-	}
-
-	return 1;
-}
+stock parse_resp_bulk_string(data[], respData[], error[], errorSize) {}
 
 stock parse_resp_array(data[], respData[], error[], errorSize) {}
 
