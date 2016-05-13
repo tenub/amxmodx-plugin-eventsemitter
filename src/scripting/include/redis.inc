@@ -42,6 +42,44 @@ redis_publish(channel[], data[])
 }
 
 /**
+ * Set variable number of key/value pairs to hash fields/values for a key in redis database
+ * Requires at least one key/value pair
+ *
+ * @param string dbKey
+ * @param array fieldValue,...
+ *
+ * @return boolean False on redis error
+ */
+redis_hmset(const dbKey[], args[][])
+{
+	new numArgs = sizeof(args);
+
+	if (!numArgs % 2)
+	{
+		return false;
+	}
+
+	static command[512], commandSize, recvBuffer[512], respType, respData[512];
+
+	commandSize = format_command_resp(command, 511, "HMSET", key, args);
+
+	if (redis_connect())
+	{
+		if (redis_authenticate())
+		{
+			redis_send(g_RedisSocket, command, commandSize);
+			redis_receive(g_RedisSocket, recvBuffer, 511);
+
+			respType = parse_resp_data(recvBuffer, respData);
+		}
+
+		redis_disconnect(g_RedisSocket);
+	}
+
+	return respType == 1 && str_to_num(respData) >= 0;
+}
+
+/**
  * Open a listening connection and subscribe to supplied redis channel
  * Dump data to listenBuffer
  *

@@ -2,6 +2,22 @@
 #include <amxmisc>
 #include <redis>
 
+/*enum _:ServerInfo
+{
+	Server_IP[32],
+	Server_Name[33],
+	Server_Map[32],
+	Server_MaxPlayers
+};
+
+enum _:PlayerInfo
+{
+	Player_IP[32],
+	Player_Authid[32],
+	Player_Name[33],
+	Player_Team[11]
+};*/
+
 new g_ServerIp[32], g_ServerName[33];
 //new g_Subscriber
 
@@ -200,25 +216,31 @@ public EventSayTeam(id)
  */
 get_game_state()
 {
-	static payload[512], maxPlayers, map[32];
+	static payload[512], serverIP[32], serverName[33], serverMap[32], serverMaxPlayers;
 
 	// get server info to send with init message
-	get_user_ip(0, g_ServerIp, 31); // server ip+port
-	get_user_name(0, g_ServerName, 32); // server hostname
-	get_mapname(map, 31); // current map
+	get_user_ip(0, serverIP, 31); // server ip+port
+	get_user_name(0, serverName, 32); // server hostname
+	get_mapname(serverMap, 31); // current map
 
 	// get max players server setting
-	maxPlayers = get_maxplayers();
-
-	//new players[maxPlayers], numPlayers;
-
-	//get_players(players, numPlayers, "chi");
+	serverMaxPlayers = get_maxplayers();
 
 	// format values to a single JSON string (payload)
-	formatex(payload, 511, "{^"server^":^"%s^",^"map^":^"%s^",^"maxplayers^":%i}", g_ServerIp, map, maxPlayers);
+	formatex(payload, 511, "{^"serverip^":^"%s^",^"servername^":^"%s^",^"map^":^"%s^",^"maxplayers^":%i}", serverIP, serverName, serverMap, serverMaxPlayers);
 
-	// publish JSON to redis servers channel
-	redis_publish("servers", payload);
+	// publish JSON to redis channel if data was set to database successfully
+	if (redis_hmset(serverKey, "ip", serverIP, "name", serverName, "map", serverMap, "maxplayers", serverMaxPlayers))
+	{
+		redis_publish("servers", payload);
+	}
+
+	/*client.lpush([channel, payload], err => {
+		if (err) throw err;
+
+		client.ltrim(channel, 0, 99);
+		io.emit(channel, msg);
+	});*/
 }
 
 /**
