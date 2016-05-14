@@ -15,12 +15,9 @@ new const CRLF[] = "^r^n";
  *
  * @return integer Length of string buffer
  */
-format_command_resp(buffer[], const bufferSize, ...)
+format_command_resp(buffer[], const bufferSize, Array:args, numArgs)
 {
-	new numArgs = numargs();
-
-	// do not format unless there are arguments
-	if (numArgs <= 2)
+	if (!numArgs)
 	{
 		return false;
 	}
@@ -28,35 +25,25 @@ format_command_resp(buffer[], const bufferSize, ...)
 	static num[8], arg[256];
 
 	buffer[0] = 0;
-	num_to_str(numArgs - 2, num, 7);
+	num_to_str(numArgs, num, 7);
+
 	add(buffer, bufferSize, "*");
 	add(buffer, bufferSize, num);
 	add(buffer, bufferSize, CRLF);
 
-	new pos, chr;
-
-	for (new i = 2; i < numArgs; ++i)
+	for (new i = 0; i < numArgs; ++i)
 	{
-		pos = 0, chr = 0;
-
-		while ((chr = getarg(i, pos)))
-		{
-			arg[pos++] = chr;
-
-			if (pos >= 255)
-			{
-				break;
-			}
-		}
-
-		arg[pos++] = 0;
+		ArrayGetString(args, i, arg, 255);
 		num_to_str(strlen(arg), num, 7);
+
 		add(buffer, bufferSize, "$");
 		add(buffer, bufferSize, num);
 		add(buffer, bufferSize, CRLF);
 		add(buffer, bufferSize, arg);
 		add(buffer, bufferSize, CRLF);
 	}
+
+	ArrayDestroy(args);
 
 	return strlen(buffer);
 }
@@ -96,7 +83,9 @@ parse_resp_data(data[], respData[])
 		case '-': {
 			respType = parse_resp_error(data[1], respData, error, 511);
 		}
-		default: server_print(error);
+		default: {
+			server_print(error);
+		}
 	}
 
 	return respType;
@@ -104,21 +93,20 @@ parse_resp_data(data[], respData[])
 
 stock parse_resp_integer(data[], respData[], error[], errorSize)
 {
-	new i;
+	new i = 0;
 
 	while (data[i])
 	{
-		if (data[i] < 48 || data[i] > 57)
+		if (data[i] == 13 && data[i + 1] == 10)
+		{
+			break;
+		}
+		else if (data[i] < 48 || data[i] > 57)
 		{
 			respData[0] = 0;
 			copy(error, errorSize, "Non-integer response");
 
 			return 0;
-		}
-
-		if (data[i] == 13 && data[i + 1] == 10)
-		{
-			break;
 		}
 
 		add(respData, 510, data[i], 1);

@@ -35,7 +35,7 @@ public plugin_init()
 	//g_Subscriber = redis_subscribe("webchat", g_MsgType, g_MsgChannel, g_MsgText);
 
 	// get current game state of server and publish
-	get_game_state();
+	set_task(5.0, "get_game_state");
 }
 
 public plugin_end()
@@ -70,7 +70,7 @@ public client_authorized(id)
 	get_user_ip(id, ip, 31);
 
 	// format values to a single JSON string (payload)
-	formatex(payload, 511, "{^"server^":^"%s^",^"connected^":%i,^"authid^":^"%s^",^"name^":^"%s^",^"ip^":^"%s^",^"admin^":%i}", g_ServerIp, true, authid, name, ip, isAdmin);
+	formatex(payload, 511, "{^"serverip^":^"%s^",^"servername^":^"%s^",^"connected^":%i,^"authid^":^"%s^",^"name^":^"%s^",^"ip^":^"%s^",^"admin^":%i}", g_ServerIp, g_ServerName, true, authid, name, ip, isAdmin);
 
 	// publish JSON to redis servers channel
 	redis_publish("servers", payload);
@@ -98,7 +98,7 @@ public client_disconnected(id)
 	static payload[512];
 
 	// format values to a single JSON string (payload)
-	formatex(payload, 511, "{^"server^":^"%s^",^"connected^":%i,^"authid^":^"%s^"}", g_ServerIp, false, authid);
+	formatex(payload, 511, "{^"serverip^":^"%s^",^"servername^":^"%s^",^"connected^":%i,^"authid^":^"%s^"}", g_ServerIp, g_ServerName, false, authid);
 
 	// publish JSON to redis servers channel
 	redis_publish("servers", payload);
@@ -165,8 +165,11 @@ public EventSay(id)
 	// format values to a single JSON string (payload)
 	formatex(payload, 511, "{^"serverip^":^"%s^",^"servername^":^"%s^",^"authid^":^"%s^",^"name^":^"%s^",^"admin^":%i,^"text^":^"%s^",^"datetime^":%i}", g_ServerIp, g_ServerName, authid, name, isAdmin, text, get_systime());
 
-	// publish JSON to redis chat channel
-	redis_publish("chat", payload);
+	if (redis_lpush("chat", payload))
+	{
+		redis_ltrim("chat", 0, 99);
+		redis_publish("chat", payload);
+	}
 }
 
 /**
@@ -206,41 +209,38 @@ public EventSayTeam(id)
 	// format values to a single JSON string (payload)
 	formatex(payload, 511, "{^"serverip^":^"%s^",^"servername^":^"%s^",^"authid^":^"%s^",^"name^":^"%s^",^"team^":^"%s^",^"admin^":%i,^"text^":^"%s^",^"datetime^":%i}", g_ServerIp, g_ServerName, authid, name, team, isAdmin, text, get_systime());
 
-	// publish JSON to redis chat channel
-	redis_publish("chat", payload);
+	if (redis_lpush("chat", payload))
+	{
+		redis_ltrim("chat", 0, 99);
+		redis_publish("chat", payload);
+	}
 }
 
 /**
  * This function is called upon server init (when map has changed and plugins load)
  * Parse and prepare a server init message to publish over redis connection
  */
-get_game_state()
+public get_game_state()
 {
-	static payload[512], serverIP[32], serverName[33], serverMap[32], serverMaxPlayers;
+	static serverKey[40], serverMap[32], serverMaxPlayers[3];
 
 	// get server info to send with init message
-	get_user_ip(0, serverIP, 31); // server ip+port
-	get_user_name(0, serverName, 32); // server hostname
-	get_mapname(serverMap, 31); // current map
-
-	// get max players server setting
-	serverMaxPlayers = get_maxplayers();
-
-	// format values to a single JSON string (payload)
-	formatex(payload, 511, "{^"serverip^":^"%s^",^"servername^":^"%s^",^"map^":^"%s^",^"maxplayers^":%i}", serverIP, serverName, serverMap, serverMaxPlayers);
+	get_user_ip(0, g_ServerIp, 31);
+	get_user_name(0, g_ServerName, 32);
+	get_mapname(serverMap, 31);
+	num_to_str(get_maxplayers(), serverMaxPlayers, 2);
+	formatex(serverKey, 39, "server:%s", g_ServerIp);
 
 	// publish JSON to redis channel if data was set to database successfully
-	if (redis_hmset(serverKey, "ip", serverIP, "name", serverName, "map", serverMap, "maxplayers", serverMaxPlayers))
+	if (redis_hmset(serverKey, "ip", g_ServerIp, "name", g_ServerName, "map", serverMap, "maxplayers", serverMaxPlayers))
 	{
+		static payload[512];
+
+		// prepare server info as a JSON payload to publish
+		formatex(payload, 511, "{^"serverip^":^"%s^",^"servername^":^"%s^",^"map^":^"%s^",^"maxplayers^":%i}", g_ServerIp, g_ServerName, serverMap, serverMaxPlayers);
+
 		redis_publish("servers", payload);
 	}
-
-	/*client.lpush([channel, payload], err => {
-		if (err) throw err;
-
-		client.ltrim(channel, 0, 99);
-		io.emit(channel, msg);
-	});*/
 }
 
 /**
