@@ -32,23 +32,21 @@ stock redis_authenticate(socket)
 
 	respType = parse_resp_data(recvBuffer, msgBuffer);
 
-	return respType == 2 && equal(msgBuffer, "OK");
+	return respType == RespTypeInteger && equal(msgBuffer, "OK");
 }
 
 /**
  * Format and send a RESP command to the redis server
- * Response received into provided buffer
  *
- * @param string msgBuffer
  * @param string arg,...
  *
  * @return integer Type of data of the response
  */
-stock redis_send_command(msgBuffer[], any:...)
+stock redis_send_command(any:...)
 {
 	new numArgs = numargs();
 
-	if (numArgs < 2)
+	if (!numArgs)
 	{
 		return false;
 	}
@@ -58,16 +56,16 @@ stock redis_send_command(msgBuffer[], any:...)
 	static respType;
 	static num[8], arg[256];
 
-	sendBuffer[0] = 0, recvBuffer[0] = 0, msgBuffer[0] = 0;
+	sendBuffer[0] = 0, recvBuffer[0] = 0;
 
-	num_to_str(numArgs - 1, num, 7);
+	num_to_str(numArgs, num, 7);
 	add(sendBuffer, sendBufferSize, "*");
 	add(sendBuffer, sendBufferSize, num);
 	add(sendBuffer, sendBufferSize, CRLF);
 
 	new pos, chr;
 
-	for (new i = 1; i < numArgs; ++i)
+	for (new i = 0; i < numArgs; ++i)
 	{
 		pos = 0, chr = 0;
 
@@ -97,7 +95,7 @@ stock redis_send_command(msgBuffer[], any:...)
 			redis_send(g_RedisSocket, sendBuffer, strlen(sendBuffer));
 			redis_receive(g_RedisSocket, recvBuffer, recvBufferSize);
 
-			respType = parse_resp_data(recvBuffer, msgBuffer);
+			respType = parse_resp_data(recvBuffer);
 		}
 
 		redis_disconnect(g_RedisSocket);
@@ -110,17 +108,16 @@ stock redis_send_command(msgBuffer[], any:...)
  * Open a listening connection and subscribe to supplied redis channel
  * Response received into provided buffer
  *
- * @param string msgBuffer
  * @param string channel
  *
  * @return boolean False on redis error
  */
-stock redis_subscribe(msgBuffer[], const channel[])
+stock redis_subscribe(const channel[])
 {
 	static sendBuffer[512], sendBufferSize = sizeof(sendBuffer) - 1, sendBufferLen;
 	static recvBuffer[512], recvBufferSize = sizeof(recvBuffer) - 1;
 
-	sendBuffer[0] = 0, recvBuffer[0] = 0, msgBuffer[0] = 0;
+	sendBuffer[0] = 0, recvBuffer[0] = 0;
 
 	sendBufferLen = format_command_resp(sendBuffer, sendBufferSize, "SUBSCRIBE", channel);
 
@@ -130,7 +127,7 @@ stock redis_subscribe(msgBuffer[], const channel[])
 		{
 			redis_send(g_RedisSocketListen, sendBuffer, sendBufferLen);
 			redis_receive(g_RedisSocketListen, recvBuffer, recvBufferSize);
-			parse_resp_data(recvBuffer, msgBuffer);
+			parse_resp_data(recvBuffer);
 		}
 	}
 
@@ -145,9 +142,8 @@ stock redis_release()
 {
 	static sendBuffer[512], sendBufferSize = sizeof(sendBuffer) - 1, sendBufferLen;
 	static recvBuffer[512], recvBufferSize = sizeof(recvBuffer) - 1;
-	new msgBuffer[512];
 
-	sendBuffer[0] = 0, recvBuffer[0] = 0, msgBuffer[0] = 0;
+	sendBuffer[0] = 0, recvBuffer[0] = 0;
 
 	sendBufferLen = format_command_resp(sendBuffer, sendBufferSize, "UNSUBSCRIBE");
 
@@ -156,7 +152,7 @@ stock redis_release()
 		redis_send(g_RedisSocketListen, sendBuffer, sendBufferLen);
 		redis_receive(g_RedisSocketListen, recvBuffer, recvBufferSize);
 
-		if (!parse_resp_data(recvBuffer, msgBuffer))
+		if (!parse_resp_data(recvBuffer))
 		{
 			server_print("Error unsubscribing");
 		}

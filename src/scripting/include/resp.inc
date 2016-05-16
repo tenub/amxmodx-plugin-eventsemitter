@@ -3,6 +3,15 @@
 #endif
 #define _resp_included
 
+enum
+{
+	RespTypeError = 0,
+	RespTypeInteger,
+	RespTypeString,
+	RespTypeBulk,
+	RespTypeArray
+}
+
 new const CRLF[] = "^r^n";
 
 /**
@@ -74,9 +83,14 @@ format_command_resp(buffer[], const bufferSize, ...)
  *
  * @return integer
  */
-stock parse_resp_data(data[], message[])
+stock parse_resp_data(data[], message[] = 0)
 {
 	new respType, error[512], errorSize = sizeof(error);
+
+	if (!strlen(message))
+	{
+		new message[512];
+	}
 
 	switch (data[0])
 	{
@@ -87,7 +101,7 @@ stock parse_resp_data(data[], message[])
 		case '-': { respType = parse_resp_error(data[1], message, error, errorSize); }
 	}
 
-	if (respType == 0)
+	if (respType == RespTypeError)
 	{
 		server_print(error);
 	}
@@ -110,10 +124,9 @@ stock parse_resp_simple_string(data[], message[])
 		i++;
 	}
 
-	return 2;
+	return RespTypeString;
 }
 
-// 6\r\nstring\r\n
 stock parse_resp_bulk_string(data[], message[], error[], errorSize) {}
 
 stock parse_resp_array(data[], message[], error[], errorSize) {}
@@ -133,14 +146,14 @@ stock parse_resp_integer(data[], message[], error[], errorSize)
 			message[0] = 0;
 			copy(error, errorSize, "Non-integer response");
 
-			return 0;
+			return RespTypeError;
 		}
 
 		add(message, 510, data[i], 1);
 		i++;
 	}
 
-	return 1;
+	return RespTypeInteger;
 }
 
 stock parse_resp_error(data[], message[], error[], errorSize)
@@ -148,5 +161,5 @@ stock parse_resp_error(data[], message[], error[], errorSize)
 	parse_resp_simple_string(data, message);
 	copy(error, errorSize, message);
 
-	return 0;
+	return RespTypeError;
 }

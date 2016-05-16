@@ -6,14 +6,12 @@ new g_ServerIp[32], g_ServerName[33];
 
 public plugin_init()
 {
-	new msgBuffer[512];
-
 	register_plugin("Server events emitter", "1.0", "pvab");
 
 	register_clcmd("say", "EventSay");
 	register_clcmd("say_team", "EventSayTeam");
 
-	redis_subscribe(msgBuffer, "webchat");
+	redis_subscribe("webchat");
 
 	get_game_state();
 }
@@ -40,15 +38,21 @@ public client_authorized(id)
 		return;
 	}
 
-	static payload[512], name[33], ip[32];
-	new msgBuffer[512], isAdmin = is_user_admin(id);
+	static serverKey[40], name[33], ip[32];
+	new isAdmin = is_user_admin(id);
 
 	get_user_name(id, name, 32);
 	get_user_ip(id, ip, 31);
+	formatex(serverKey, 39, "players:%s", g_ServerIp);
 
-	formatex(payload, 511, "{^"serverip^":^"%s^",^"servername^":^"%s^",^"connected^":%d,^"authid^":^"%s^",^"name^":^"%s^",^"ip^":^"%s^",^"admin^":%d}", g_ServerIp, g_ServerName, true, authid, name, ip, isAdmin);
+	if (redis_send_command("sadd", serverKey, authid) && redis_send_command("hmset", authid, "name", name, "ip", ip))
+	{
+		static payload[512];
 
-	redis_send_command(msgBuffer, "publish", "servers", payload);
+		formatex(payload, 511, "{^"serverip^":^"%s^",^"servername^":^"%s^",^"connected^":%d,^"authid^":^"%s^",^"name^":^"%s^",^"ip^":^"%s^",^"admin^":%d}", g_ServerIp, g_ServerName, true, authid, name, ip, isAdmin);
+
+		redis_send_command("publish", serverKey, payload);
+	}
 }
 
 /**
@@ -68,12 +72,18 @@ public client_disconnected(id)
 		return;
 	}
 
-	static payload[512];
-	new msgBuffer[512];
+	static serverKey[40];
 
-	formatex(payload, 511, "{^"serverip^":^"%s^",^"servername^":^"%s^",^"connected^":%d,^"authid^":^"%s^"}", g_ServerIp, g_ServerName, false, authid);
+	formatex(serverKey, 39, "players:%s", g_ServerIp);
 
-	redis_send_command(msgBuffer, "publish", "servers", payload);
+	if (redis_send_command("srem", serverKey, authid))
+	{
+		static payload[512];
+
+		formatex(payload, 511, "{^"serverip^":^"%s^",^"servername^":^"%s^",^"connected^":%d,^"authid^":^"%s^"}", g_ServerIp, g_ServerName, false, authid);
+
+		redis_send_command("publish", serverKey, payload);
+	}
 }
 
 /**
@@ -93,11 +103,10 @@ public client_disconnected(id)
 public EventPlayerRank(table[9], map[32], authid[32], name[33], Float:time, date[20], weapon[7], cp, gc)
 {
 	static payload[512];
-	new msgBuffer[512];
 
 	formatex(payload, 511, "{^"table^":^"%s^",^"map^":^"%s^",^"authid^":^"%s^",^"name^":^"%s^",^"time^":%f,^"date^":^"%s^",^"weapon^":^"%s^",^"cp^":%d,^"gc^":%d}", table, map, authid, name, time, date, weapon, cp, gc);
 
-	redis_send_command(msgBuffer, "publish", "records", payload);
+	redis_send_command("publish", "records", payload);
 }
 
 /**
@@ -119,7 +128,7 @@ public EventSay(id)
 	}
 
 	static payload[512], authid[32], name[33];
-	new msgBuffer[512], isAdmin = is_user_admin(id);
+	new isAdmin = is_user_admin(id);
 
 	get_user_name(id, name, 32);
 	get_user_authid(id, authid, 31);
@@ -130,10 +139,10 @@ public EventSay(id)
 
 	formatex(payload, 511, "{^"serverip^":^"%s^",^"servername^":^"%s^",^"authid^":^"%s^",^"name^":^"%s^",^"admin^":%d,^"text^":^"%s^",^"datetime^":%d}", g_ServerIp, g_ServerName, authid, name, isAdmin, text, get_systime());
 
-	if (redis_send_command(msgBuffer, "lpush", "chat", payload))
+	if (redis_send_command("lpush", "chat", payload))
 	{
-		redis_send_command(msgBuffer, "ltrim", "chat", "0", "99");
-		redis_send_command(msgBuffer, "publish", "chat", payload);
+		redis_send_command("ltrim", "chat", "0", "99");
+		redis_send_command("publish", "chat", payload);
 	}
 }
 
@@ -156,7 +165,7 @@ public EventSayTeam(id)
 	}
 
 	static payload[512], authid[32], name[33], team[32];
-	new msgBuffer[512], isAdmin = is_user_admin(id);
+	new isAdmin = is_user_admin(id);
 
 	get_user_name(id, name, 32);
 	get_user_authid(id, authid, 31);
@@ -168,10 +177,10 @@ public EventSayTeam(id)
 
 	formatex(payload, 511, "{^"serverip^":^"%s^",^"servername^":^"%s^",^"authid^":^"%s^",^"name^":^"%s^",^"team^":^"%s^",^"admin^":%d,^"text^":^"%s^",^"datetime^":%d}", g_ServerIp, g_ServerName, authid, name, team, isAdmin, text, get_systime());
 
-	if (redis_send_command(msgBuffer, "lpush", "chat", payload))
+	if (redis_send_command("lpush", "chat", payload))
 	{
-		redis_send_command(msgBuffer, "ltrim", "chat", "0", "99");
-		redis_send_command(msgBuffer, "publish", "chat", payload);
+		redis_send_command("ltrim", "chat", "0", "99");
+		redis_send_command("publish", "chat", payload);
 	}
 }
 
@@ -182,7 +191,6 @@ public EventSayTeam(id)
 public get_game_state()
 {
 	static serverKey[40], serverMap[32], serverMaxPlayers[3];
-	new msgBuffer[512];
 
 	get_user_ip(0, g_ServerIp, 31);
 	get_user_name(0, g_ServerName, 32);
@@ -190,13 +198,13 @@ public get_game_state()
 	num_to_str(get_maxplayers(), serverMaxPlayers, 2);
 	formatex(serverKey, 39, "server:%s", g_ServerIp);
 
-	if (redis_send_command(msgBuffer, "hmset", serverKey, "ip", g_ServerIp, "name", g_ServerName, "map", serverMap, "maxplayers", serverMaxPlayers))
+	if (redis_send_command("hmset", serverKey, "ip", g_ServerIp, "name", g_ServerName, "map", serverMap, "maxplayers", serverMaxPlayers))
 	{
 		static payload[512];
 
 		formatex(payload, 511, "{^"serverip^":^"%s^",^"servername^":^"%s^",^"map^":^"%s^",^"maxplayers^":%d}", g_ServerIp, g_ServerName, serverMap, serverMaxPlayers);
 
-		redis_send_command(msgBuffer, "publish", "servers", payload);
+		redis_send_command("publish", "servers", payload);
 	}
 }
 
