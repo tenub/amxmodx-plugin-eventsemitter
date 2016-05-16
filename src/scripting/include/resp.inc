@@ -3,6 +3,42 @@
 #endif
 #define _resp_included
 
+static const char StringReply = '+';
+static const char ErrorReply = '-';
+static const char IntegerReply = ':';
+static const char BulkReply = '$';
+static const char ArrayReply = '*';
+
+enum RespResult
+{
+	Completed,
+	Incompleted,
+	Error
+};
+
+enum RespState
+{
+	Start = 0,
+
+	String,
+	StringLF,
+
+	ErrorString,
+	ErrorLF,
+
+	Integer,
+	IntegerLF,
+
+	BulkLen,
+	BulkLenLF,
+	Bulk,
+	BulkCR,
+	BulkLF,
+
+	ArrayLen,
+	ArrayLenLF
+};
+
 new const CRLF[] = "^r^n";
 
 /**
@@ -76,20 +112,49 @@ format_command_resp(buffer[], const bufferSize, ...)
  */
 stock parse_resp_data(data[], message[])
 {
-	new respType, error[512], errorSize = sizeof(error);
+	new i, c, bulkLen, error[512], RespState:respState;
 
-	switch (data[0])
+	while ((c = data[i]))
 	{
-		case '+': { respType = parse_resp_simple_string(data[1], message); }
-		//case '$': { respType = parse_resp_bulk_string(data[1], message, error, errorSize); }
-		//case '*': { respType = parse_resp_array(data[1], message, error, errorSize); }
-		case ':': { respType = parse_resp_integer(data[1], message, error, errorSize); }
-		case '-': { respType = parse_resp_error(data[1], message, error, errorSize); }
-	}
+		switch (respState)
+		{
+			case respState[Start]:
+			{
+				message[0] = 0;
 
-	if (respType == 0)
-	{
-		server_print(error);
+				switch (c)
+				{
+					case StringReply:
+					{
+						respState = String;
+					}
+					case ErrorReply:
+					{
+						respState = ErrorString;
+					}
+					case IntegerReply: {
+						respState = Integer;
+					}
+					case BulkReply: {
+						respState = BulkLen;
+						bulkLen = 0;
+					}
+					case ArrayReply: {
+						respState = ArrayLen;
+					}
+					default: {
+						respState = Start;
+						return 0;
+					}
+				}
+			}
+			default: {
+				respState = Start;
+				return 0;
+			}
+		}
+
+		i++;
 	}
 
 	return respType;
