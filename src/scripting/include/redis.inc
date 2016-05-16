@@ -11,19 +11,24 @@
 new g_RedisSocket, g_RedisSocketListen;
 
 /**
- * Called by "redis_publish" to authenticate with the redis server
+ * Send authentication command using specified socket
  *
- * @return boolean Success or failure from authentication attempt
+ * @param integer socket
+ *
+ * @return boolean If the command was successful
  */
 stock redis_authenticate(socket)
 {
-	static command[512], commandSize, recvBuffer[512];
+	static sendBuffer[512], sendBufferSize = sizeof(sendBuffer) - 1, sendBufferLen;
+	static recvBuffer[512], recvBufferSize = sizeof(recvBuffer) - 1;
 	new respType, msgBuffer[512];
 
-	commandSize = format_command_resp(command, 511, "AUTH", REDIS_PASS);
+	sendBuffer[0] = 0, recvBuffer[0] = 0;
 
-	redis_send(socket, command, commandSize);
-	redis_receive(socket, recvBuffer, 511);
+	sendBufferLen = format_command_resp(sendBuffer, sendBufferSize, "AUTH", REDIS_PASS);
+
+	redis_send(socket, sendBuffer, sendBufferLen);
+	redis_receive(socket, recvBuffer, recvBufferSize);
 
 	respType = parse_resp_data(recvBuffer, msgBuffer);
 
@@ -53,9 +58,7 @@ stock redis_send_command(msgBuffer[], any:...)
 	static respType;
 	static num[8], arg[256];
 
-	sendBuffer[0] = 0;
-	recvBuffer[0] = 0;
-	msgBuffer[0] = 0;
+	sendBuffer[0] = 0, recvBuffer[0] = 0, msgBuffer[0] = 0;
 
 	num_to_str(numArgs - 1, num, 7);
 	add(sendBuffer, sendBufferSize, "*");
@@ -105,29 +108,28 @@ stock redis_send_command(msgBuffer[], any:...)
 
 /**
  * Open a listening connection and subscribe to supplied redis channel
- * Dump data to listenBuffer
+ * Response received into provided buffer
  *
+ * @param string msgBuffer
  * @param string channel
- * @param string msgType
- * @param string msgChannel
- * @param string msgText
  *
  * @return boolean False on redis error
  */
-stock redis_subscribe(channel[])
+stock redis_subscribe(msgBuffer[], const channel[])
 {
-	static sendBuffer[512], sendBufferLen, recvBuffer[512], msgBuffer[512];
+	static sendBuffer[512], sendBufferSize = sizeof(sendBuffer) - 1, sendBufferLen;
+	static recvBuffer[512], recvBufferSize = sizeof(recvBuffer) - 1;
 
 	sendBuffer[0] = 0, recvBuffer[0] = 0, msgBuffer[0] = 0;
 
-	sendBufferLen = format_command_resp(sendBuffer, 511, "SUBSCRIBE", channel);
+	sendBufferLen = format_command_resp(sendBuffer, sendBufferSize, "SUBSCRIBE", channel);
 
 	if (redis_listen())
 	{
 		if (redis_authenticate(g_RedisSocketListen))
 		{
 			redis_send(g_RedisSocketListen, sendBuffer, sendBufferLen);
-			redis_receive(g_RedisSocketListen, msgBuffer, 511);
+			redis_receive(g_RedisSocketListen, recvBuffer, recvBufferSize);
 			parse_resp_data(recvBuffer, msgBuffer);
 		}
 	}
@@ -136,25 +138,23 @@ stock redis_subscribe(channel[])
 }
 
 /**
- * Release a redis connection
+ * Release the redis listen connection
  * Unsubscribe from all redis channels and close the connection
- *
- * @param integer socket
- *
- * @return boolean False on redis error
  */
 stock redis_release()
 {
-	static sendBuffer[512], sendBufferLen, recvBuffer[512], msgBuffer[512];
+	static sendBuffer[512], sendBufferSize = sizeof(sendBuffer) - 1, sendBufferLen;
+	static recvBuffer[512], recvBufferSize = sizeof(recvBuffer) - 1;
+	new msgBuffer[512];
 
 	sendBuffer[0] = 0, recvBuffer[0] = 0, msgBuffer[0] = 0;
 
-	sendBufferLen = format_command_resp(sendBuffer, 511, "UNSUBSCRIBE");
+	sendBufferLen = format_command_resp(sendBuffer, sendBufferSize, "UNSUBSCRIBE");
 
 	if (g_RedisSocketListen)
 	{
 		redis_send(g_RedisSocketListen, sendBuffer, sendBufferLen);
-		redis_receive(g_RedisSocketListen, recvBuffer, 511);
+		redis_receive(g_RedisSocketListen, recvBuffer, recvBufferSize);
 
 		if (!parse_resp_data(recvBuffer, msgBuffer))
 		{
@@ -166,7 +166,7 @@ stock redis_release()
 }
 
 /**
- * Called by "redis_publish" to open a TCP connection with a remote server
+ * Open a TCP connection with a remote redis server
  *
  * @return integer Socket
  */
@@ -180,15 +180,9 @@ stock redis_connect()
 	{
 		switch (error)
 		{
-			case 1: {
-				server_print("Error creating socket");
-			}
-			case 2: {
-				server_print("Error resolving remote hostname");
-			}
-			case 3: {
-				server_print("Error connecting socket");
-			}
+			case 1: { server_print("Error creating socket"); }
+			case 2: { server_print("Error resolving remote hostname"); }
+			case 3: { server_print("Error connecting socket"); }
 		}
 	}
 
@@ -196,7 +190,7 @@ stock redis_connect()
 }
 
 /**
- * Called by "redis_subscribe" to open a listening TCP connection with a remote server
+ * Open a TCP listen connection with a remote redis server
  *
  * @return integer Socket
  */
@@ -210,19 +204,25 @@ stock redis_listen()
 	{
 		switch (error)
 		{
-			case 1: {
-				server_print("Error creating listen socket");
-			}
-			case 2: {
-				server_print("Error resolving remote hostname for listen socket");
-			}
-			case 3: {
-				server_print("Error connecting listen socket");
-			}
+			case 1: { server_print("Error creating listen socket"); }
+			case 2: { server_print("Error resolving remote hostname for listen socket"); }
+			case 3: { server_print("Error connecting listen socket"); }
 		}
 	}
 
 	return g_RedisSocketListen;
+}
+
+/**
+ * Send a formatted string over a redis connection through specified socket
+ *
+ * @param integer socket
+ * @param string buffer
+ * @param integer commandSize
+ */
+stock redis_send(socket, buffer[], const bufferSize)
+{
+	socket_send(socket, buffer, bufferSize);
 }
 
 /**
@@ -238,18 +238,6 @@ stock redis_receive(socket, buffer[], const bufferSize)
 	{
 		socket_recv(socket, buffer, bufferSize);
 	}
-}
-
-/**
- * Send a formatted string over a redis connection through specified socket
- *
- * @param integer socket
- * @param string buffer
- * @param integer commandSize
- */
-stock redis_send(socket, buffer[], const bufferSize)
-{
-	socket_send(socket, buffer, bufferSize);
 }
 
 /**

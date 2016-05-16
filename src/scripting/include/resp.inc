@@ -3,6 +3,38 @@
 #endif
 #define _resp_included
 
+enum RespReply
+{
+	StringReply = '+',
+	ErrorReply = '-',
+	IntegerReply = ':',
+	BulkReply = '$',
+	ArrayReply = '*'
+};
+
+enum RespState
+{
+	Start,
+
+	String,
+	StringLF,
+
+	ErrorString,
+	ErrorLF,
+
+	Integer,
+	IntegerLF,
+
+	BulkLen,
+	BulkLenLF,
+	Bulk,
+	BulkCR,
+	BulkLF,
+
+	ArrayLen,
+	ArrayLenLF
+};
+
 new const CRLF[] = "^r^n";
 
 /**
@@ -77,32 +109,48 @@ format_command_resp(buffer[], const bufferSize, ...)
  */
 stock parse_resp_data(data[], respData[])
 {
-	new respType, error[512];
+	new respType, error[512], errorSize = sizeof(error);
 
 	switch (data[0])
 	{
-		case '+': {
-			respType = parse_resp_simple_string(data[1], respData);
-		}
-		/*case '$': {
-			respType = parse_resp_bulk_string(data[1], respData, error, 511);
-		}
-		case '*': {
-			respType = parse_resp_array(data[1], respData, error, 511);
-		}*/
-		case ':': {
-			respType = parse_resp_integer(data[1], respData, error, 511);
-		}
-		case '-': {
-			respType = parse_resp_error(data[1], respData, error, 511);
-		}
-		default: {
-			server_print(error);
-		}
+		case '+': { respType = parse_resp_simple_string(data[1], respData); }
+		//case '$': { respType = parse_resp_bulk_string(data[1], respData, error, errorSize); }
+		//case '*': { respType = parse_resp_array(data[1], respData, error, errorSize); }
+		case ':': { respType = parse_resp_integer(data[1], respData, error, errorSize); }
+		case '-': { respType = parse_resp_error(data[1], respData, error, errorSize); }
+	}
+
+	if (respType == 0)
+	{
+		server_print(error);
 	}
 
 	return respType;
 }
+
+stock parse_resp_simple_string(data[], respData[])
+{
+	new i;
+
+	while (data[i])
+	{
+		if (data[i] == 13 && data[i + 1] == 10)
+		{
+			break;
+		}
+
+		add(respData, 510, data[i], 1);
+		i++;
+	}
+
+	return 2;
+}
+
+stock parse_resp_bulk_string(data[], respData[], error[], errorSize) {
+
+}
+
+stock parse_resp_array(data[], respData[], error[], errorSize) {}
 
 stock parse_resp_integer(data[], respData[], error[], errorSize)
 {
@@ -128,28 +176,6 @@ stock parse_resp_integer(data[], respData[], error[], errorSize)
 
 	return 1;
 }
-
-stock parse_resp_simple_string(data[], respData[])
-{
-	new i;
-
-	while (data[i])
-	{
-		if (data[i] == 13 && data[i + 1] == 10)
-		{
-			break;
-		}
-
-		add(respData, 510, data[i], 1);
-		i++;
-	}
-
-	return 2;
-}
-
-stock parse_resp_bulk_string(data[], respData[], error[], errorSize) {}
-
-stock parse_resp_array(data[], respData[], error[], errorSize) {}
 
 stock parse_resp_error(data[], respData[], error[], errorSize)
 {
