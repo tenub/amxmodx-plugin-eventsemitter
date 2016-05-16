@@ -11,76 +11,35 @@
 new g_RedisSocket, g_RedisSocketListen;
 
 /**
- * Set variable number of key/value pairs to hash fields/values for a key in redis database
- * Requires at least one key/value pair
+ * Called by "redis_publish" to authenticate with the redis server
  *
- * @param string dbKey
- * @param string field/value,...
- *
- * @return boolean False on redis error
+ * @return boolean Success or failure from authentication attempt
  */
-stock redis_hmset(const dbKey[], ...)
+stock redis_authenticate(socket)
 {
-	new numArgs = numargs();
+	static command[512], commandSize, recvBuffer[512];
+	new respType, msgBuffer[512];
 
-	if (numArgs < 2 || numArgs % 2 == 0)
-	{
-		return false;
-	}
+	commandSize = format_command_resp(command, 511, "AUTH", REDIS_PASS);
 
-	new pos, chr, arg[256], Array:args = ArrayCreate(256);
+	redis_send(socket, command, commandSize);
+	redis_receive(socket, recvBuffer, 511);
 
-	ArrayPushString(args, "HMSET");
+	respType = parse_resp_data(recvBuffer, msgBuffer);
 
-	for (new i = 0; i < numArgs; ++i)
-	{
-		pos = 0, chr = 0;
-
-		while ((chr = getarg(i, pos)))
-		{
-			arg[pos++] = chr;
-
-			if (pos >= 255)
-			{
-				break;
-			}
-		}
-
-		arg[pos++] = 0;
-
-		ArrayPushString(args, arg);
-	}
-
-	static command[512], commandSize, recvBuffer[512], respType, respData[512];
-
-	commandSize = format_command_resp(command, 511, args, ArraySize(args));
-
-	if (redis_connect())
-	{
-		if (redis_authenticate())
-		{
-			redis_send(g_RedisSocket, command, commandSize);
-			redis_receive(g_RedisSocket, recvBuffer, 511);
-
-			respType = parse_resp_data(recvBuffer, respData);
-		}
-
-		redis_disconnect(g_RedisSocket);
-	}
-
-	return respType == 2 && equal(respData, "OK");
+	return respType == 2 && equal(msgBuffer, "OK");
 }
 
 /**
- * Push value to a key in redis database
- * Requires at least one data value
+ * Format and send a RESP command to the redis server
+ * Response received into provided buffer
  *
- * @param string dbKey
- * @param string value,...
+ * @param string msgBuffer
+ * @param string arg,...
  *
- * @return boolean False on redis error
+ * @return integer Type of data of the response
  */
-stock redis_lpush(const dbKey[], ...)
+stock redis_send_command(msgBuffer[], any:...)
 {
 	new numArgs = numargs();
 
@@ -89,11 +48,23 @@ stock redis_lpush(const dbKey[], ...)
 		return false;
 	}
 
-	new pos, chr, arg[256], Array:args = ArrayCreate(256);
+	static sendBuffer[512], sendBufferSize = sizeof(sendBuffer) - 1;
+	static recvBuffer[512], recvBufferSize = sizeof(recvBuffer) - 1;
+	static respType;
+	static num[8], arg[256];
 
-	ArrayPushString(args, "LPUSH");
+	sendBuffer[0] = 0;
+	recvBuffer[0] = 0;
+	msgBuffer[0] = 0;
 
-	for (new i = 0; i < numArgs; ++i)
+	num_to_str(numArgs - 1, num, 7);
+	add(sendBuffer, sendBufferSize, "*");
+	add(sendBuffer, sendBufferSize, num);
+	add(sendBuffer, sendBufferSize, CRLF);
+
+	new pos, chr;
+
+	for (new i = 1; i < numArgs; ++i)
 	{
 		pos = 0, chr = 0;
 
@@ -108,105 +79,28 @@ stock redis_lpush(const dbKey[], ...)
 		}
 
 		arg[pos++] = 0;
-
-		ArrayPushString(args, arg);
+		num_to_str(strlen(arg), num, 7);
+		add(sendBuffer, sendBufferSize, "$");
+		add(sendBuffer, sendBufferSize, num);
+		add(sendBuffer, sendBufferSize, CRLF);
+		add(sendBuffer, sendBufferSize, arg);
+		add(sendBuffer, sendBufferSize, CRLF);
 	}
-
-	static command[512], commandSize, recvBuffer[512], respType, respData[512];
-
-	commandSize = format_command_resp(command, 511, args, ArraySize(args));
 
 	if (redis_connect())
 	{
-		if (redis_authenticate())
+		if (redis_authenticate(g_RedisSocket))
 		{
-			redis_send(g_RedisSocket, command, commandSize);
-			redis_receive(g_RedisSocket, recvBuffer, 511);
+			redis_send(g_RedisSocket, sendBuffer, strlen(sendBuffer));
+			redis_receive(g_RedisSocket, recvBuffer, recvBufferSize);
 
-			respType = parse_resp_data(recvBuffer, respData);
+			respType = parse_resp_data(recvBuffer, msgBuffer);
 		}
 
 		redis_disconnect(g_RedisSocket);
 	}
 
-	return respType == 1 && str_to_num(respData) >= 0;
-}
-
-/**
- * Trim an existing list from start to stop
- *
- * @param string dbKey
- * @param integer start
- * @param integer stop
- *
- * @return boolean False on redis error
- */
-stock redis_ltrim(const dbKey[], start, stop)
-{
-	static command[512], commandSize, recvBuffer[512];
-	new respType, respData[512], szStart[10], szStop[10];
-	new Array:args = ArrayCreate(256);
-
-	num_to_str(start, szStart, 9);
-	num_to_str(stop, szStop, 9);
-
-	ArrayPushString(args, "LTRIM");
-	ArrayPushString(args, dbKey);
-	ArrayPushString(args, szStart);
-	ArrayPushString(args, szStop);
-
-	commandSize = format_command_resp(command, 511, args, ArraySize(args));
-
-	if (redis_connect())
-	{
-		if (redis_authenticate())
-		{
-			redis_send(g_RedisSocket, command, commandSize);
-			redis_receive(g_RedisSocket, recvBuffer, 511);
-
-			respType = parse_resp_data(recvBuffer, respData);
-		}
-
-		redis_disconnect(g_RedisSocket);
-	}
-
-	return respType == 2 && equal(respData, "OK");
-}
-
-/**
- * Send a publish command to the redis server with supplied channel and message data
- *
- * @param string channel
- * @param string data
- *
- * @return boolean False on redis error
- */
-stock redis_publish(channel[], data[])
-{
-	static command[512], commandSize, recvBuffer[512];
-	new respType, respData[512];
-	new Array:args = ArrayCreate(256);
-
-	ArrayPushString(args, "PUBLISH");
-	ArrayPushString(args, channel);
-	ArrayPushString(args, data);
-
-	commandSize = format_command_resp(command, 511, args, ArraySize(args));
-
-	if (redis_connect())
-	{
-		if (redis_authenticate())
-		{
-			redis_send(g_RedisSocket, command, commandSize);
-			redis_receive(g_RedisSocket, recvBuffer, 511);
-
-			respType = parse_resp_data(recvBuffer, respData);
-		}
-
-		redis_disconnect(g_RedisSocket);
-	}
-
-	return respType == 1 && str_to_num(respData) >= 0;
+	return respType;
 }
 
 /**
@@ -220,24 +114,26 @@ stock redis_publish(channel[], data[])
  *
  * @return boolean False on redis error
  */
-/*redis_subscribe(channel[], msgType[], msgChannel[], msgText[])
+stock redis_subscribe(channel[])
 {
-	static command[512], commandSize, listenBuffer[512]
+	static sendBuffer[512], sendBufferLen, recvBuffer[512], msgBuffer[512];
 
-	commandSize = format_command_resp(command, 511, "SUBSCRIBE", channel)
+	sendBuffer[0] = 0, recvBuffer[0] = 0, msgBuffer[0] = 0;
+
+	sendBufferLen = format_command_resp(sendBuffer, 511, "SUBSCRIBE", channel);
 
 	if (redis_listen())
 	{
-		if (redis_authenticate())
+		if (redis_authenticate(g_RedisSocketListen))
 		{
-			redis_send(g_RedisSocketListen, command, commandSize)
-			redis_receive(g_RedisSocketListen, listenBuffer, 511)
-			parse_resp_data(listenBuffer, 511, msgType, msgChannel, msgText)
+			redis_send(g_RedisSocketListen, sendBuffer, sendBufferLen);
+			redis_receive(g_RedisSocketListen, msgBuffer, 511);
+			parse_resp_data(recvBuffer, msgBuffer);
 		}
 	}
 
-	return g_RedisSocketListen
-}*/
+	return g_RedisSocketListen;
+}
 
 /**
  * Release a redis connection
@@ -247,49 +143,26 @@ stock redis_publish(channel[], data[])
  *
  * @return boolean False on redis error
  */
-/*redis_release(socket)
+stock redis_release()
 {
-	static command[512], commandSize, recvBuffer[512]
+	static sendBuffer[512], sendBufferLen, recvBuffer[512], msgBuffer[512];
 
-	commandSize = format_command_resp(command, 511, "UNSUBSCRIBE")
+	sendBuffer[0] = 0, recvBuffer[0] = 0, msgBuffer[0] = 0;
 
-	if (g_RedisSocketListen > 0)
+	sendBufferLen = format_command_resp(sendBuffer, 511, "UNSUBSCRIBE");
+
+	if (g_RedisSocketListen)
 	{
-		redis_send(g_RedisSocketListen, command, commandSize)
-		redis_receive(g_RedisSocketListen, recvBuffer, 511)
+		redis_send(g_RedisSocketListen, sendBuffer, sendBufferLen);
+		redis_receive(g_RedisSocketListen, recvBuffer, 511);
 
-		if (recvBuffer[0] == '-')
+		if (!parse_resp_data(recvBuffer, msgBuffer))
 		{
-			server_print("Error unsubscribing")
+			server_print("Error unsubscribing");
 		}
 
-		redis_disconnect(g_RedisSocketListen)
+		redis_disconnect(g_RedisSocketListen);
 	}
-}*/
-
-/**
- * Called by "redis_publish" to authenticate with the redis server
- *
- * @return boolean Success or failure from authentication attempt
- */
-stock redis_authenticate()
-{
-	static command[512], commandSize, recvBuffer[512];
-	new respType, respData[512];
-	new Array:args = ArrayCreate(256);
-
-	ArrayPushString(args, "AUTH");
-	ArrayPushString(args, REDIS_PASS);
-
-	commandSize = format_command_resp(command, 511, args, ArraySize(args));
-
-	redis_send(g_RedisSocket, command, commandSize);
-	redis_receive(g_RedisSocket, recvBuffer, 511);
-
-	respType = parse_resp_data(recvBuffer, respData);
-
-	// check if redis server responds with success message
-	return respType == 2 && equal(respData, "OK");
 }
 
 /**

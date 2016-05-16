@@ -2,29 +2,10 @@
 #include <amxmisc>
 #include <redis>
 
-/*enum _:ServerInfo
-{
-	Server_IP[32],
-	Server_Name[33],
-	Server_Map[32],
-	Server_MaxPlayers
-};
-
-enum _:PlayerInfo
-{
-	Player_IP[32],
-	Player_Authid[32],
-	Player_Name[33],
-	Player_Team[11]
-};*/
-
 new g_ServerIp[32], g_ServerName[33];
-//new g_Subscriber
 
 public plugin_init()
 {
-	//static g_MsgType[32], g_MsgChannel[64], g_MsgText[512];
-
 	register_plugin("Server events emitter", "1.0", "pvab");
 
 	// register event handlers
@@ -32,16 +13,16 @@ public plugin_init()
 	register_clcmd("say_team", "EventSayTeam");
 
 	// subscribe to web chat channel
-	//g_Subscriber = redis_subscribe("webchat", g_MsgType, g_MsgChannel, g_MsgText);
+	redis_subscribe("webchat");
 
 	// get current game state of server and publish
-	set_task(5.0, "get_game_state");
+	get_game_state();
 }
 
 public plugin_end()
 {
 	// unsubscribe from all channels and free subscriber handle
-	//redis_release(g_Subscriber);
+	redis_release();
 }
 
 /**
@@ -62,7 +43,7 @@ public client_authorized(id)
 		return;
 	}
 
-	static payload[512], name[33], ip[32];
+	static payload[512], name[33], ip[32], respBuffer[512];
 	new isAdmin = is_user_admin(id);
 
 	// get user info to send with connect message
@@ -73,7 +54,7 @@ public client_authorized(id)
 	formatex(payload, 511, "{^"serverip^":^"%s^",^"servername^":^"%s^",^"connected^":%i,^"authid^":^"%s^",^"name^":^"%s^",^"ip^":^"%s^",^"admin^":%i}", g_ServerIp, g_ServerName, true, authid, name, ip, isAdmin);
 
 	// publish JSON to redis servers channel
-	redis_publish("servers", payload);
+	redis_send_command(respBuffer, "publish", "servers", payload);
 }
 
 /**
@@ -95,13 +76,13 @@ public client_disconnected(id)
 		return;
 	}
 
-	static payload[512];
+	static payload[512], respBuffer[512];
 
 	// format values to a single JSON string (payload)
 	formatex(payload, 511, "{^"serverip^":^"%s^",^"servername^":^"%s^",^"connected^":%i,^"authid^":^"%s^"}", g_ServerIp, g_ServerName, false, authid);
 
 	// publish JSON to redis servers channel
-	redis_publish("servers", payload);
+	redis_send_command(respBuffer, "publish", "servers", payload);
 }
 
 /**
@@ -120,13 +101,13 @@ public client_disconnected(id)
  */
 public EventPlayerRank(table[9], map[32], authid[32], name[33], Float:time, date[20], weapon[7], cp, gc)
 {
-	static payload[512];
+	static payload[512], respBuffer[512];
 
 	// format values to a single JSON string (payload)
 	formatex(payload, 511, "{^"table^":^"%s^",^"map^":^"%s^",^"authid^":^"%s^",^"name^":^"%s^",^"time^":%f,^"date^":^"%s^",^"weapon^":^"%s^",^"cp^":%i,^"gc^":%i}", table, map, authid, name, time, date, weapon, cp, gc);
 
 	// publish JSON to redis records channel
-	redis_publish("records", payload);
+	redis_send_command(respBuffer, "publish", "records", payload);
 }
 
 /**
@@ -150,7 +131,7 @@ public EventSay(id)
 		return;
 	}
 
-	static payload[512], authid[32], name[33];
+	static payload[512], authid[32], name[33], respBuffer[512];
 	new isAdmin = is_user_admin(id);
 
 	// get user info to send with chat message
@@ -165,10 +146,10 @@ public EventSay(id)
 	// format values to a single JSON string (payload)
 	formatex(payload, 511, "{^"serverip^":^"%s^",^"servername^":^"%s^",^"authid^":^"%s^",^"name^":^"%s^",^"admin^":%i,^"text^":^"%s^",^"datetime^":%i}", g_ServerIp, g_ServerName, authid, name, isAdmin, text, get_systime());
 
-	if (redis_lpush("chat", payload))
+	if (redis_send_command(respBuffer, "lpush", "chat", payload))
 	{
-		redis_ltrim("chat", 0, 99);
-		redis_publish("chat", payload);
+		redis_send_command(respBuffer, "ltrim", "chat", "0", "99");
+		redis_send_command(respBuffer, "publish", "chat", payload);
 	}
 }
 
@@ -193,7 +174,7 @@ public EventSayTeam(id)
 		return;
 	}
 
-	static payload[512], authid[32], name[33], team[32];
+	static payload[512], authid[32], name[33], team[32], respBuffer[512];
 	new isAdmin = is_user_admin(id);
 
 	// get user info to send with chat message
@@ -209,10 +190,10 @@ public EventSayTeam(id)
 	// format values to a single JSON string (payload)
 	formatex(payload, 511, "{^"serverip^":^"%s^",^"servername^":^"%s^",^"authid^":^"%s^",^"name^":^"%s^",^"team^":^"%s^",^"admin^":%i,^"text^":^"%s^",^"datetime^":%i}", g_ServerIp, g_ServerName, authid, name, team, isAdmin, text, get_systime());
 
-	if (redis_lpush("chat", payload))
+	if (redis_send_command(respBuffer, "lpush", "chat", payload))
 	{
-		redis_ltrim("chat", 0, 99);
-		redis_publish("chat", payload);
+		redis_send_command(respBuffer, "ltrim", "chat", "0", "99");
+		redis_send_command(respBuffer, "publish", "chat", payload);
 	}
 }
 
@@ -222,7 +203,7 @@ public EventSayTeam(id)
  */
 public get_game_state()
 {
-	static serverKey[40], serverMap[32], serverMaxPlayers[3];
+	static serverKey[40], serverMap[32], serverMaxPlayers[3], respBuffer[512];
 
 	// get server info to send with init message
 	get_user_ip(0, g_ServerIp, 31);
@@ -232,14 +213,14 @@ public get_game_state()
 	formatex(serverKey, 39, "server:%s", g_ServerIp);
 
 	// publish JSON to redis channel if data was set to database successfully
-	if (redis_hmset(serverKey, "ip", g_ServerIp, "name", g_ServerName, "map", serverMap, "maxplayers", serverMaxPlayers))
+	if (redis_send_command(respBuffer, "hmset", serverKey, "ip", g_ServerIp, "name", g_ServerName, "map", serverMap, "maxplayers", serverMaxPlayers))
 	{
 		static payload[512];
 
 		// prepare server info as a JSON payload to publish
 		formatex(payload, 511, "{^"serverip^":^"%s^",^"servername^":^"%s^",^"map^":^"%s^",^"maxplayers^":%i}", g_ServerIp, g_ServerName, serverMap, serverMaxPlayers);
 
-		redis_publish("servers", payload);
+		redis_send_command(respBuffer, "publish", "servers", payload);
 	}
 }
 
