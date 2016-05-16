@@ -45,7 +45,7 @@ public client_authorized(id)
 	get_user_ip(id, ip, 31);
 	formatex(serverKey, 39, "players:%s", g_ServerIp);
 
-	if (redis_send_command("sadd", serverKey, authid) && redis_send_command("hmset", authid, "name", name, "ip", ip))
+	if (redis_send_command("sadd", serverKey, authid) && redis_send_command("hmset", authid, "authid", authid, "name", name, "ip", ip))
 	{
 		static payload[512];
 
