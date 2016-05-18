@@ -30,9 +30,9 @@ stock redis_authenticate(socket)
 	redis_send(socket, sendBuffer, sendBufferLen);
 	redis_receive(socket, recvBuffer, recvBufferSize);
 
-	respType = parse_resp_data(recvBuffer, msgBuffer);
+	respType = parse_resp_data_msg(recvBuffer, msgBuffer);
 
-	return respType == RespTypeInteger && equal(msgBuffer, "OK");
+	return respType == RespTypeString && equal(msgBuffer, "OK");
 }
 
 /**

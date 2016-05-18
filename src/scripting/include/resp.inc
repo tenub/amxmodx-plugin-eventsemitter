@@ -83,14 +83,45 @@ format_command_resp(buffer[], const bufferSize, ...)
  *
  * @return integer
  */
-stock parse_resp_data(data[], message[] = 0)
+stock parse_resp_data(data[])
 {
 	new respType, error[512], errorSize = sizeof(error);
+	new message[512];
 
-	if (!strlen(message))
+	switch (data[0])
 	{
-		new message[512];
+		case '+': { respType = parse_resp_simple_string(data[1], message); }
+		//case '$': { respType = parse_resp_bulk_string(data[1], message, error, errorSize); }
+		//case '*': { respType = parse_resp_array(data[1], message, error, errorSize); }
+		case ':': { respType = parse_resp_integer(data[1], message, error, errorSize); }
+		case '-': { respType = parse_resp_error(data[1], message, error, errorSize); }
 	}
+
+	if (respType == RespTypeError)
+	{
+		server_print(error);
+	}
+
+	return respType;
+}
+
+/**
+ * Read and parse data from RESP format
+ * Returns data type:
+ * 0 - error
+ * 1 - integer
+ * 2 - simple string
+ * 3 - bulk string
+ * 4 - array
+ *
+ * @param string data
+ * @param string message
+ *
+ * @return integer
+ */
+stock parse_resp_data_msg(data[], message[])
+{
+	new respType, error[512], errorSize = sizeof(error);
 
 	switch (data[0])
 	{
