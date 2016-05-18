@@ -43,7 +43,7 @@ public client_authorized(id)
 
 	get_user_name(id, name, 32);
 	get_user_ip(id, ip, 31);
-	formatex(serverKey, 39, "players", g_ServerIp);
+	formatex(serverKey, 39, "players:%s", g_ServerIp);
 
 	if (redis_send_command("sadd", serverKey, authid) && redis_send_command("hmset", authid, "authid", authid, "name", name, "ip", ip))
 	{
@@ -51,7 +51,7 @@ public client_authorized(id)
 
 		formatex(payload, 511, "{^"serverip^":^"%s^",^"servername^":^"%s^",^"connected^":%d,^"authid^":^"%s^",^"name^":^"%s^",^"ip^":^"%s^",^"admin^":%d}", g_ServerIp, g_ServerName, true, authid, name, ip, isAdmin);
 
-		redis_send_command("publish", serverKey, payload);
+		redis_send_command("publish", "players", payload);
 	}
 }
 
@@ -74,7 +74,7 @@ public client_disconnected(id)
 
 	static serverKey[40];
 
-	formatex(serverKey, 39, "players", g_ServerIp);
+	formatex(serverKey, 39, "players:%s", g_ServerIp);
 
 	if (redis_send_command("srem", serverKey, authid))
 	{
@@ -82,7 +82,7 @@ public client_disconnected(id)
 
 		formatex(payload, 511, "{^"serverip^":^"%s^",^"servername^":^"%s^",^"connected^":%d,^"authid^":^"%s^"}", g_ServerIp, g_ServerName, false, authid);
 
-		redis_send_command("publish", serverKey, payload);
+		redis_send_command("publish", "players", payload);
 	}
 }
 
