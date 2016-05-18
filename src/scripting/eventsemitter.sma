@@ -43,7 +43,7 @@ public client_authorized(id)
 
 	get_user_name(id, name, 32);
 	get_user_ip(id, ip, 31);
-	formatex(serverKey, 39, "players:%s", g_ServerIp);
+	formatex(serverKey, 39, "players", g_ServerIp);
 
 	if (redis_send_command("sadd", serverKey, authid) && redis_send_command("hmset", authid, "authid", authid, "name", name, "ip", ip))
 	{
@@ -74,7 +74,7 @@ public client_disconnected(id)
 
 	static serverKey[40];
 
-	formatex(serverKey, 39, "players:%s", g_ServerIp);
+	formatex(serverKey, 39, "players", g_ServerIp);
 
 	if (redis_send_command("srem", serverKey, authid))
 	{
@@ -202,7 +202,7 @@ public get_game_state()
 	{
 		static payload[512];
 
-		formatex(payload, 511, "{^"serverip^":^"%s^",^"servername^":^"%s^",^"map^":^"%s^",^"maxplayers^":%d}", g_ServerIp, g_ServerName, serverMap, serverMaxPlayers);
+		formatex(payload, 511, "{^"ip^":^"%s^",^"name^":^"%s^",^"map^":^"%s^",^"maxplayers^":%d}", g_ServerIp, g_ServerName, serverMap, serverMaxPlayers);
 
 		redis_send_command("publish", "servers", payload);
 	}
