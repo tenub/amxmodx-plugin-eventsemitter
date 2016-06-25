@@ -18,6 +18,7 @@ public plugin_init()
 
 public plugin_end()
 {
+	end_game_state();
 	redis_release();
 }
 
@@ -185,6 +186,28 @@ public EventSayTeam(id)
 }
 
 /**
+ * This function is called upon server shutdown (or when map is changing)
+ * Prepare and send a server end message to publish over the redis connection
+ */
+public end_game_state()
+{
+	static serverKey[40];
+
+	get_user_ip(0, g_ServerIp, 31);
+	get_user_name(0, g_ServerName, 32);
+	formatex(serverKey, 39, "server:%s", g_ServerIp);
+
+	if (redis_send_command("hset", serverKey, "available", "0"))
+	{
+		static payload[512];
+
+		formatex(payload, 511, "{^"ip^":^"%s^",^"name^":^"%s^",^"available^":%d}", g_ServerIp, g_ServerName, 0);
+
+		redis_send_command("publish", "servers", payload);
+	}
+}
+
+/**
  * This function is called upon server init (when map has changed and plugins load)
  * Prepare and send a server init message to publish over the redis connection
  */
@@ -198,11 +221,11 @@ public get_game_state()
 	num_to_str(get_maxplayers(), serverMaxPlayers, 2);
 	formatex(serverKey, 39, "server:%s", g_ServerIp);
 
-	if (redis_send_command("hmset", serverKey, "ip", g_ServerIp, "name", g_ServerName, "map", serverMap, "maxplayers", serverMaxPlayers))
+	if (redis_send_command("hmset", serverKey, "ip", g_ServerIp, "name", g_ServerName, "map", serverMap, "maxplayers", serverMaxPlayers, "available", "1"))
 	{
 		static payload[512];
 
-		formatex(payload, 511, "{^"ip^":^"%s^",^"name^":^"%s^",^"map^":^"%s^",^"maxplayers^":%d}", g_ServerIp, g_ServerName, serverMap, serverMaxPlayers);
+		formatex(payload, 511, "{^"ip^":^"%s^",^"name^":^"%s^",^"map^":^"%s^",^"maxplayers^":%d,^"available^":%d}", g_ServerIp, g_ServerName, serverMap, serverMaxPlayers, 1);
 
 		redis_send_command("publish", "servers", payload);
 	}
