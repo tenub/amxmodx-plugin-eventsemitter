@@ -2,9 +2,9 @@
 
 > Emit server events to a redis subscriber
 
-## Notes
+## Environment Variables
 
-Create a `.env` file located in the `src/include` directory with the following information. This is required to successfully communicate with a redis server:
+Create a `.env.inc` file located in the `src/scripting/include` directory binding the following symbols:
 
 ### `REDIS_HOST`
 
@@ -17,3 +17,9 @@ Port on which the redis server is running
 ### `REDIS_PASS`
 
 Authentication password
+
+An example file is included in the `src/scripting/include` directory.
+
+## Build
+
+Using Node.js, one may easily automate building the plugin using the command: `npm i && npm run build`.
